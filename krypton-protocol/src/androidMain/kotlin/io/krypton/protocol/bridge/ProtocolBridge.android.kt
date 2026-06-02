@@ -1,38 +1,52 @@
 package io.krypton.protocol.bridge
 
-import io.krypton.core.result.CryptoResult
 import io.krypton.core.types.*
+import io.krypton.storage.api.IdentityKeyStore
+import io.krypton.storage.api.PreKeyStore
+import io.krypton.storage.api.SenderKeyStore
+import io.krypton.storage.api.SessionStore
+import org.signal.libsignal.protocol.ecc.ECKeyPair
+import kotlin.random.Random
 
 /**
  * Android platform bridge factory.
  *
- * Returns a bridge that fails until libsignal_jni.so is bundled.
- * See: https://github.com/signalapp/libsignal for Android build instructions.
+ * Android uses the same Java JNI backend as JVM.
+ * The libsignal-client Maven artifact bundles libsignal_jni.so
+ * for arm64-v8a, armeabi-v7a, and x86_64.
  */
 public actual fun createPlatformBridge(
-    identityKeyStore: io.krypton.storage.api.IdentityKeyStore,
-    sessionStore: io.krypton.storage.api.SessionStore,
-    preKeyStore: io.krypton.storage.api.PreKeyStore,
-    senderKeyStore: io.krypton.storage.api.SenderKeyStore,
+    identityKeyStore: IdentityKeyStore,
+    sessionStore: SessionStore,
+    preKeyStore: PreKeyStore,
+    senderKeyStore: SenderKeyStore,
     identityKeyPair: IdentityKeyPair,
     registrationId: RegistrationId,
-): Bridge = NotImplementedBridge(
-    identityKeyStore, sessionStore, preKeyStore, senderKeyStore,
-    identityKeyPair, registrationId, "Android native lib not loaded"
+): Bridge = RealBridge(
+    identityKeyStore = identityKeyStore,
+    sessionStore = sessionStore,
+    preKeyStore = preKeyStore,
+    senderKeyStore = senderKeyStore,
+    identityKeyPair = identityKeyPair,
+    registrationId = registrationId,
 )
 
 /**
- * Unsupported platform: returns deterministic test keys.
- * Real keys require bundling the native libsignal library.
+ * Android: Generates real Curve25519 keys via libsignal's JNI.
  */
-public actual public actual fun createPlatformIdentityKeyPair(): IdentityKeyPair =
-    IdentityKeyPair(
-        IdentityKey(PublicKey(ByteArray(32) { 1 }), 0),
-        PrivateKey(ByteArray(32) { 2 }),
+public actual fun createPlatformIdentityKeyPair(): IdentityKeyPair {
+    val kp = ECKeyPair.generate()
+    return IdentityKeyPair(
+        identityKey = IdentityKey(
+            publicKey = PublicKey(kp.publicKey.serialize()),
+            keyId = 0,
+        ),
+        privateKey = PrivateKey(kp.privateKey.serialize()),
     )
+}
 
 /**
- * Unsupported platform: generates a random valid registration ID.
+ * Android: Generates a random valid registration ID.
  */
-public actual public actual fun createPlatformRegistrationId(): RegistrationId =
-    RegistrationId(kotlin.random.Random.nextInt(1, 0x3FFF))
+public actual fun createPlatformRegistrationId(): RegistrationId =
+    RegistrationId(Random.nextInt(1, 0x3FFF))

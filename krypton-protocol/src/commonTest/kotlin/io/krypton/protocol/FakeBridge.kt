@@ -3,6 +3,7 @@ package io.krypton.protocol
 import io.krypton.core.result.CryptoResult
 import io.krypton.core.types.*
 import io.krypton.protocol.bridge.Bridge
+import io.krypton.protocol.bridge.KyberPreKeyResult
 import io.krypton.protocol.models.CiphertextMessage
 import io.krypton.protocol.models.CiphertextMessageType
 import io.krypton.protocol.models.PreKeyBundle
@@ -110,6 +111,13 @@ public class FakeBridge(
             signature = simpleKdf(seed + byteArrayOf(0x03)),
         )
     }
+
+    override fun generateKyberPreKey(keyId: Int): CryptoResult<KyberPreKeyResult> =
+        CryptoResult.Success(KyberPreKeyResult(
+            keyId = keyId,
+            publicKey = simpleKdf(byteArrayOf(keyId.toByte()) + ByteArray(32) { 0xAB.toByte() }),
+            signature = simpleKdf(ByteArray(32) { 0xCD.toByte() }),
+        ))
 
     // ── Simple "KDF" using a deterministic algorithm ──────────────────────────
 

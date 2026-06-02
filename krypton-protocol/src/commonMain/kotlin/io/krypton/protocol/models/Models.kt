@@ -5,10 +5,6 @@ import io.krypton.core.types.*
 /**
  * A bundle of pre-keys that a user publishes so others can establish
  * a session with them (X3DH handshake).
- */
-/**
- * A bundle of pre-keys that a user publishes so others can establish
- * a session with them (X3DH handshake).
  *
  * @property sender       Who published this bundle (their ProtocolAddress).
  * @property identityKey  The sender's long-term identity key.
@@ -19,6 +15,9 @@ import io.krypton.core.types.*
  * @property signedPreKeyId ID of the signed pre-key.
  * @property signedPreKeyPublic The signed pre-key public key.
  * @property signedPreKeySignature Signature of the signed pre-key by the identity key.
+ * @property kyberPreKeyId ID of the Kyber pre-key (post-quantum).
+ * @property kyberPreKeyPublic The Kyber pre-key public key.
+ * @property kyberPreKeySignature Signature of the Kyber pre-key by the identity key.
  */
 public data class PreKeyBundle(
     val sender: ProtocolAddress,
@@ -30,6 +29,9 @@ public data class PreKeyBundle(
     val signedPreKeyId: Int,
     val signedPreKeyPublic: PublicKey,
     val signedPreKeySignature: ByteArray,
+    val kyberPreKeyId: Int = 0,
+    val kyberPreKeyPublic: ByteArray = ByteArray(0),
+    val kyberPreKeySignature: ByteArray = ByteArray(0),
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -42,7 +44,10 @@ public data class PreKeyBundle(
             preKeyPublic == other.preKeyPublic &&
             signedPreKeyId == other.signedPreKeyId &&
             signedPreKeyPublic == other.signedPreKeyPublic &&
-            signedPreKeySignature.contentEquals(other.signedPreKeySignature)
+            signedPreKeySignature.contentEquals(other.signedPreKeySignature) &&
+            kyberPreKeyId == other.kyberPreKeyId &&
+            kyberPreKeyPublic.contentEquals(other.kyberPreKeyPublic) &&
+            kyberPreKeySignature.contentEquals(other.kyberPreKeySignature)
     }
 
     override fun hashCode(): Int {
@@ -55,6 +60,9 @@ public data class PreKeyBundle(
         r = 31 * r + signedPreKeyId
         r = 31 * r + signedPreKeyPublic.hashCode()
         r = 31 * r + signedPreKeySignature.contentHashCode()
+        r = 31 * r + kyberPreKeyId
+        r = 31 * r + kyberPreKeyPublic.contentHashCode()
+        r = 31 * r + kyberPreKeySignature.contentHashCode()
         return r
     }
 }

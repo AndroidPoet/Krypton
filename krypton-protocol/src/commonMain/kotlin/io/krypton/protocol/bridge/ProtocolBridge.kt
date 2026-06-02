@@ -10,6 +10,15 @@ import io.krypton.storage.api.SenderKeyStore
 import io.krypton.storage.api.SessionStore
 
 /**
+ * Result of generating a Kyber pre-key (post-quantum).
+ */
+public data class KyberPreKeyResult(
+    val keyId: Int,
+    val publicKey: ByteArray,
+    val signature: ByteArray,
+)
+
+/**
  * Contract for the native crypto operations that the protocol layer needs.
  *
  * Production uses [RealBridge] on JVM (which delegates to libsignal via JNI).
@@ -63,6 +72,14 @@ public abstract class Bridge(
     public abstract fun generateSignedPreKey(
         signedKeyId: Int,
     ): CryptoResult<SignedPreKey>
+
+    /**
+     * Generate a Kyber pre-key (post-quantum) with a real signature from
+     * the identity key. Required for modern libsignal PreKeyBundle.
+     */
+    public abstract fun generateKyberPreKey(
+        keyId: Int,
+    ): CryptoResult<KyberPreKeyResult>
 }
 
 /**
@@ -125,5 +142,8 @@ public open class NotImplementedBridge(
         CryptoResult.Failure(io.krypton.core.result.CryptoError.internal(message))
 
     override fun generateSignedPreKey(signedKeyId: Int): CryptoResult<SignedPreKey> =
+        CryptoResult.Failure(io.krypton.core.result.CryptoError.internal(message))
+
+    override fun generateKyberPreKey(keyId: Int): CryptoResult<KyberPreKeyResult> =
         CryptoResult.Failure(io.krypton.core.result.CryptoError.internal(message))
 }

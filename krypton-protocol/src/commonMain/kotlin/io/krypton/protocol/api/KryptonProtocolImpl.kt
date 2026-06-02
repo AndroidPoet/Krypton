@@ -5,6 +5,7 @@ import io.krypton.core.types.*
 import io.krypton.protocol.bridge.Bridge
 import io.krypton.protocol.bridge.createPlatformBridge
 import io.krypton.protocol.models.CiphertextMessage
+import io.krypton.protocol.models.CiphertextMessageType
 import io.krypton.protocol.models.PreKeyBundle
 import io.krypton.storage.api.IdentityKeyStore
 import io.krypton.storage.api.PreKeyStore
@@ -75,18 +76,26 @@ public class KryptonProtocolImpl internal constructor(
     override suspend fun decrypt(
         sender: ProtocolAddress,
         message: CiphertextMessage,
-    ): CryptoResult<ByteArray> =
-        sessionStore.loadSession(sender).flatMap { record ->
-            when (record) {
-                null -> CryptoResult.Failure(
-                    io.krypton.core.result.CryptoError.notFound(
-                        "No session with $sender",
-                        io.krypton.core.result.CryptoErrorOrigin.Protocol,
+    ): CryptoResult<ByteArray> {
+        // PreKeySignalMessages can be decrypted without an existing session.
+        // libsignal's SessionCipher handles session creation on the fly.
+        // Regular messages (WHISPER_TYPE) require an existing session.
+        return if (message.type == CiphertextMessageType.PRE_KEY) {
+            bridge.decrypt(sender, message)
+        } else {
+            sessionStore.loadSession(sender).flatMap { record ->
+                when (record) {
+                    null -> CryptoResult.Failure(
+                        io.krypton.core.result.CryptoError.notFound(
+                            "No session with $sender",
+                            io.krypton.core.result.CryptoErrorOrigin.Protocol,
+                        )
                     )
-                )
-                else -> bridge.decrypt(sender, message)
+                    else -> bridge.decrypt(sender, message)
+                }
             }
         }
+    }
 
     // ── Pre-key management ─────────────────────────────────────────────────
 
@@ -100,17 +109,26 @@ public class KryptonProtocolImpl internal constructor(
         preKeyStore.getCurrentSignedPreKeyId().flatMap { spkId ->
             preKeyStore.loadSignedPreKey(spkId).flatMap { spk ->
                 preKeyStore.preKeyCount().flatMap { count ->
-                    CryptoResult.Success(PreKeyBundle(
-                        sender = localAddress,
-                        identityKey = identityKeyPair.identityKey,
-                        registrationId = registrationId,
-                        deviceId = localAddress.deviceId,
-                        preKeyId = null,
-                        preKeyPublic = null,
-                        signedPreKeyId = spk.keyId,
-                        signedPreKeyPublic = spk.keyPair.publicKey,
-                        signedPreKeySignature = spk.signature,
-                    ))
+                    // Generate a Kyber pre-key — libsignal requires one in the bundle.
+                    // The bridge handles the actual signing of the Kyber key with the
+                    // identity key. We pass the serialized key bytes through the model.
+                    val kyberResult = bridge.generateKyberPreKey(0)
+                    kyberResult.map { kyber ->
+                        PreKeyBundle(
+                            sender = localAddress,
+                            identityKey = identityKeyPair.identityKey,
+                            registrationId = registrationId,
+                            deviceId = localAddress.deviceId,
+                            preKeyId = null,
+                            preKeyPublic = null,
+                            signedPreKeyId = spk.keyId,
+                            signedPreKeyPublic = spk.keyPair.publicKey,
+                            signedPreKeySignature = spk.signature,
+                            kyberPreKeyId = kyber.keyId,
+                            kyberPreKeyPublic = kyber.publicKey,
+                            kyberPreKeySignature = kyber.signature,
+                        )
+                    }
                 }
             }
         }

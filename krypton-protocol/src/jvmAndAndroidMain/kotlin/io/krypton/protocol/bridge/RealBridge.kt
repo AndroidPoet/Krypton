@@ -80,8 +80,18 @@ public class RealBridge(
 
             val remoteAddress = SignalProtocolAddress(bundle.sender.name, bundle.sender.deviceId.value)
 
-            // Generate dummy Kyber keys to satisfy libsignal's PreKeyBundle constructor
-            val dummyKyberKeyPair = KEMKeyPair.generate(KEMKeyType.KYBER_1024)
+            // Reconstruct the Kyber public key from the serialized bytes in the bundle.
+            // The sender signed this Kyber key with their identity key before publishing.
+            val kyberPublicKey = if (bundle.kyberPreKeyPublic.isNotEmpty()) {
+                KEMPublicKey(bundle.kyberPreKeyPublic)
+            } else {
+                // Fallback for bundles without Kyber — generate a dummy key signed
+                // locally (won't verify against the sender's identity, but required
+                // for the libsignal API). In practice, modern bundles always include Kyber.
+                val fallback = KEMKeyPair.generate(KEMKeyType.KYBER_1024)
+                fallback.publicKey
+            }
+
             val signalBundle = LibsignalPreKeyBundle(
                 bundle.registrationId.value,
                 bundle.deviceId.value,
@@ -91,9 +101,9 @@ public class RealBridge(
                 ECPublicKey(bundle.signedPreKeyPublic.bytes),
                 bundle.signedPreKeySignature,
                 SignalIdentityKey(ECPublicKey(bundle.identityKey.publicKey.bytes)),
-                0,                        // kyberPreKeyId
-                dummyKyberKeyPair.publicKey, // kyberPreKey
-                ByteArray(0),              // kyberPreKeySignature
+                bundle.kyberPreKeyId,
+                kyberPublicKey,
+                bundle.kyberPreKeySignature,
             )
 
             val builder = SessionBuilder(signalStores, remoteAddress)
@@ -168,8 +178,31 @@ public class RealBridge(
             val ecKeyPair = ECKeyPair.generate()
             val pub = PublicKey(ecKeyPair.publicKey.serialize())
             val priv = PrivateKey(ecKeyPair.privateKey.serialize())
-            val signature = ByteArray(64) { (signedKeyId xor it).toByte() }
-            SignedPreKey(signedKeyId, KeyPair(pub, priv), signature)
+
+            // Sign the public key of the signed pre-key with our identity private key.
+            // libsignal's SessionBuilder.process() verifies this signature during the
+            // X3DH handshake — a fake signature will be rejected with "invalid signature".
+            val identityPrivKey = ECPrivateKey(identityKeyPair.privateKey.bytes)
+            val realSignature = identityPrivKey.calculateSignature(ecKeyPair.publicKey.serialize())
+
+            SignedPreKey(signedKeyId, KeyPair(pub, priv), realSignature)
+        }
+
+    override fun generateKyberPreKey(keyId: Int): CryptoResult<KyberPreKeyResult> =
+        CryptoResult.catching {
+            ensureLoaded()
+            val kyberKeyPair = KEMKeyPair.generate(KEMKeyType.KYBER_1024)
+            val kyberPubBytes = kyberKeyPair.publicKey.serialize()
+            // Sign the Kyber public key with our identity key (XEd25519)
+            val identityPrivKey = ECPrivateKey(identityKeyPair.privateKey.bytes)
+            val signature = identityPrivKey.calculateSignature(kyberPubBytes)
+
+            // Store the Kyber pre-key in the adapter so that loadKyberPreKey
+            // can find it when libsignal needs it during PreKeySignalMessage decryption.
+            val record = KyberPreKeyRecord(keyId, System.currentTimeMillis(), kyberKeyPair, signature)
+            signalStores.storeKyberPreKey(keyId, record)
+
+            KyberPreKeyResult(keyId, kyberPubBytes, signature)
         }
 }
 
@@ -183,6 +216,7 @@ internal class SignalProtocolStoreAdapter(
     private val senderKeyStore: KryptonSenderKeyStore,
     private val localIdentityKeyPair: SignalIdentityKeyPair,
     private val localRegistrationId: Int,
+    private val kyberPreKeyRecords: MutableMap<Int, KyberPreKeyRecord> = mutableMapOf(),
 ) : SignalIdentityKeyStore,
     org.signal.libsignal.protocol.state.SessionStore,
     org.signal.libsignal.protocol.state.PreKeyStore,
@@ -322,13 +356,23 @@ internal class SignalProtocolStoreAdapter(
     // ── KyberPreKeyStore ─────────────────────────────────────────────────
 
     override fun loadKyberPreKey(keyId: Int): KyberPreKeyRecord {
-        throw org.signal.libsignal.protocol.InvalidKeyIdException("Kyber keys not yet supported")
+        return kyberPreKeyRecords[keyId]
+            ?: throw org.signal.libsignal.protocol.InvalidKeyIdException("KyberPreKey $keyId not found")
     }
 
-    override fun loadKyberPreKeys(): MutableList<KyberPreKeyRecord> = mutableListOf()
-    override fun storeKyberPreKey(keyId: Int, record: KyberPreKeyRecord) {}
-    override fun containsKyberPreKey(keyId: Int): Boolean = false
-    override fun markKyberPreKeyUsed(keyId: Int, deviceId: Int, pubKey: ECPublicKey?) {}
+    override fun loadKyberPreKeys(): MutableList<KyberPreKeyRecord> =
+        kyberPreKeyRecords.values.toMutableList()
+
+    override fun storeKyberPreKey(keyId: Int, record: KyberPreKeyRecord) {
+        kyberPreKeyRecords[keyId] = record
+    }
+
+    override fun containsKyberPreKey(keyId: Int): Boolean =
+        kyberPreKeyRecords.containsKey(keyId)
+
+    override fun markKyberPreKeyUsed(keyId: Int, deviceId: Int, pubKey: ECPublicKey?) {
+        kyberPreKeyRecords.remove(keyId)
+    }
 
     // ── SenderKeyStore (required by SignalProtocolStore) ─────────────────
 

@@ -26,7 +26,7 @@ public actual fun createPlatformBridge(
  * Unsupported platform: returns deterministic test keys.
  * Real keys require bundling the native libsignal library.
  */
-public actual public actual fun createPlatformIdentityKeyPair(): IdentityKeyPair =
+public actual fun createPlatformIdentityKeyPair(): IdentityKeyPair =
     IdentityKeyPair(
         IdentityKey(PublicKey(ByteArray(32) { 1 }), 0),
         PrivateKey(ByteArray(32) { 2 }),
@@ -35,5 +35,5 @@ public actual public actual fun createPlatformIdentityKeyPair(): IdentityKeyPair
 /**
  * Unsupported platform: generates a random valid registration ID.
  */
-public actual public actual fun createPlatformRegistrationId(): RegistrationId =
+public actual fun createPlatformRegistrationId(): RegistrationId =
     RegistrationId(kotlin.random.Random.nextInt(1, 0x3FFF))

@@ -34,13 +34,30 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
         }
 
-        jvmMain.dependencies {
-            // libsignal-client provides the real JNI bridge for desktop JVM
-            implementation("org.signal:libsignal-client:0.86.5")
+        // Shared source set for JVM + Android where libsignal classes are available
+        val commonMain by getting
+        val jvmAndAndroidMain by creating {
+            dependsOn(commonMain)
+            dependencies {
+                // libsignal-client is a pure JAR — provides classes for compilation
+                // Each platform brings its own runtime artifact (libsignal-client for JVM,
+                // libsignal-android for Android) which includes native libs.
+                compileOnly(libs.libsignal.client)
+            }
         }
 
-        androidMain.dependencies {
-            // For Android, libsignal provides native .so via AAR or Maven dependency
+        jvmMain {
+            dependsOn(jvmAndAndroidMain)
+            dependencies {
+                implementation(libs.libsignal.client)
+            }
+        }
+
+        androidMain {
+            dependsOn(jvmAndAndroidMain)
+            dependencies {
+                implementation(libs.libsignal.android)
+            }
         }
 
         commonTest.dependencies {
