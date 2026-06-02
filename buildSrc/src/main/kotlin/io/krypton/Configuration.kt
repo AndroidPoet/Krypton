@@ -1,0 +1,9 @@
+package io.krypton
+
+object Configuration {
+    const val GROUP = "io.krypton"
+    const val VERSION = "0.1.0"
+    const val COMPILE_SDK = 35
+    const val MIN_SDK = 21
+    const val JVM_TARGET = "17"
+}

@@ -1,0 +1,26 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+@Suppress("UnstableApiUsage")
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "krypton"
+
+include(":krypton-core")
+include(":krypton-factory")
+include(":krypton-storage")
+include(":krypton-protocol")
+include(":krypton-sealed-sender")
+include(":krypton-double-ratchet")
+include(":krypton-zkgroup")
+include(":samples:encrypted-chat")
