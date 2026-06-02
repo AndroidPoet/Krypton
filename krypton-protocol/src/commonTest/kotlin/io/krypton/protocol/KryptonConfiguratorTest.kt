@@ -30,21 +30,24 @@ class KryptonConfiguratorTest {
     }
 
     @Test
-    fun `configurator throws if identityKeyPair missing`() {
-        assertFailsWith<IllegalStateException> {
-            KryptonConfigurator().apply {
-                registrationId = RegistrationId(1234)
-            }.build()
-        }
+    fun `configurator auto-generates identity key pair if not provided`() {
+        val protocol = KryptonConfigurator().apply {
+            registrationId = RegistrationId(1234)
+        }.build()
+
+        assertNotNull(protocol.identityKeyPair)
     }
 
     @Test
-    fun `configurator throws if registrationId missing`() {
-        assertFailsWith<IllegalStateException> {
-            KryptonConfigurator().apply {
-                identityKeyPair = identity
-            }.build()
-        }
+    fun `configurator auto-generates registration id if not provided`() {
+        val protocol = KryptonConfigurator().apply {
+            bridge = FakeBridge(
+                identityKeyPair = identity,
+                registrationId = RegistrationId(1234),
+            )
+        }.build()
+
+        assertNotNull(protocol.registrationId)
     }
 
     @Test

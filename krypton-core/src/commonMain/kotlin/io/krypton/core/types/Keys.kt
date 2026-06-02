@@ -3,7 +3,7 @@ package io.krypton.core.types
 // ── Core key types ─────────────────────────────────────────────────────────
 
 public class PublicKey(public val bytes: ByteArray) {
-    init { require(bytes.size == 32) { "Public key must be exactly 32 bytes" } }
+    init { require(bytes.isNotEmpty()) { "Public key must not be empty" } }
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is PublicKey) return false

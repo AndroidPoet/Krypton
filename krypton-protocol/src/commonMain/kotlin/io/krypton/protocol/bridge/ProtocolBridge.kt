@@ -82,6 +82,21 @@ public expect fun createPlatformBridge(
 ): Bridge
 
 /**
+ * Platform-specific identity key pair generation.
+ *
+ * On JVM, this generates real Curve25519 keys via libsignal.
+ * On unsupported platforms, returns deterministic test keys.
+ */
+public expect fun createPlatformIdentityKeyPair(): IdentityKeyPair
+
+/**
+ * Platform-specific registration ID generation.
+ *
+ * On all platforms, returns a random valid registration ID.
+ */
+public expect fun createPlatformRegistrationId(): RegistrationId
+
+/**
  * A [Bridge] that always returns [CryptoResult.Failure] with the given message.
  *
  * Used as a fallback for platforms whose native libsignal library has not

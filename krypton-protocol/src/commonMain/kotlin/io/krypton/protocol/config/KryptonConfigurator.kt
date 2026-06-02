@@ -5,6 +5,8 @@ import io.krypton.core.types.IdentityKeyPair
 import io.krypton.core.types.RegistrationId
 import io.krypton.protocol.bridge.Bridge
 import io.krypton.protocol.bridge.createPlatformBridge
+import io.krypton.protocol.bridge.createPlatformIdentityKeyPair
+import io.krypton.protocol.bridge.createPlatformRegistrationId
 import io.krypton.storage.api.IdentityKeyStore
 import io.krypton.storage.api.PreKeyStore
 import io.krypton.storage.api.SenderKeyStore
@@ -18,21 +20,24 @@ import io.krypton.storage.memory.InMemorySessionStore
  * Builder DSL for configuring a [KryptonProtocol] instance.
  *
  * ```
+ * // Quick start — auto-generates keys, uses platform-native crypto
+ * val protocol = Krypton.protocol { }
+ *
+ * // Advanced — customize everything
  * val protocol = Krypton.protocol {
  *     identityKeyPair = myKeyPair
  *     registrationId = RegistrationId(1234)
+ *     sessionStore = myPersistentStore
  * }
  * ```
- *
- * Customise any store; by default all are in-memory for easy prototyping.
  */
 @KryptonDsl
 public class KryptonConfigurator {
 
-    /** Your device's long-term identity key pair. **Required.** */
+    /** Your device's long-term identity key pair. Auto-generated if not set. */
     public var identityKeyPair: IdentityKeyPair? = null
 
-    /** Your device's registration ID. **Required.** */
+    /** Your device's registration ID. Auto-generated if not set. */
     public var registrationId: RegistrationId? = null
 
     /** Identity key store. Defaults to [InMemoryIdentityKeyStore]. */
@@ -51,10 +56,8 @@ public class KryptonConfigurator {
     public var bridge: Bridge? = null
 
     public fun build(): KryptonProtocol {
-        val ikp = identityKeyPair
-            ?: error("identityKeyPair is required — set it in the Krypton.protocol { } block")
-        val rid = registrationId
-            ?: error("registrationId is required — set it in the Krypton.protocol { } block")
+        val ikp = identityKeyPair ?: createPlatformIdentityKeyPair()
+        val rid = registrationId ?: createPlatformRegistrationId()
 
         val iks = identityKeyStore ?: InMemoryIdentityKeyStore(
             identityKeyPair = io.krypton.core.result.CryptoResult.Success(ikp),

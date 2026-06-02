@@ -8,10 +8,11 @@ import kotlin.test.assertFailsWith
 class KeysTest {
 
     @Test
-    fun `public key requires 32 bytes`() {
-        assertFailsWith<IllegalArgumentException> { PublicKey(ByteArray(31)) }
-        assertFailsWith<IllegalArgumentException> { PublicKey(ByteArray(33)) }
-        PublicKey(ByteArray(32)) // should not throw
+    fun `public key requires non-empty bytes`() {
+        assertFailsWith<IllegalArgumentException> { PublicKey(ByteArray(0)) }
+        PublicKey(ByteArray(31)) // should not throw (platform-dependent size)
+        PublicKey(ByteArray(33)) // should not throw (serialized format)
+        PublicKey(ByteArray(32)) // should not throw (standard Curve25519)
     }
 
     @Test
