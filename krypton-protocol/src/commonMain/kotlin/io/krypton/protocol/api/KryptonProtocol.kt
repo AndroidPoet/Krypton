@@ -5,6 +5,7 @@ import io.krypton.core.types.*
 import io.krypton.protocol.models.CiphertextMessage
 import io.krypton.protocol.models.PreKeyBundle
 import io.krypton.protocol.models.SafetyNumber
+import io.krypton.protocol.models.SealedSenderMessage
 
 /**
  * The core Signal Protocol operations exposed by Krypton.
@@ -138,4 +139,35 @@ public interface KryptonProtocol : AutoCloseable {
         remoteIdentityKey: ByteArray,
         iterations: Int = 5200,
     ): CryptoResult<SafetyNumber>
+
+    // ── Sealed sender (anonymous sender) ───────────────────────────────────
+
+    /**
+     * Sealed-sender encrypt [paddedPlaintext] for [destination] so the server
+     * cannot tell who sent it. Requires a server-issued [senderCertificate] and
+     * an established session with the destination.
+     *
+     * @param localUuid   Our own UUID (sealed-sender identities are UUID-based).
+     * @param localDeviceId Our device id.
+     */
+    public suspend fun sealedSenderEncrypt(
+        localUuid: String,
+        localDeviceId: Int,
+        destination: ProtocolAddress,
+        senderCertificate: ByteArray,
+        paddedPlaintext: ByteArray,
+    ): CryptoResult<ByteArray>
+
+    /**
+     * Sealed-sender decrypt a [sealedMessage], validating the sender's certificate
+     * against [trustRoot] (the server's trust-root public key). Returns the
+     * plaintext together with the revealed sender identity.
+     */
+    public suspend fun sealedSenderDecrypt(
+        localUuid: String,
+        localDeviceId: Int,
+        trustRoot: ByteArray,
+        sealedMessage: ByteArray,
+        timestampMillis: Long,
+    ): CryptoResult<SealedSenderMessage>
 }

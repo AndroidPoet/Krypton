@@ -98,6 +98,37 @@ public abstract class Bridge(
         CryptoResult.Failure(
             io.krypton.core.result.CryptoError.internal("Safety numbers are not implemented on this platform yet."),
         )
+
+    /**
+     * Sealed-sender encrypt: wrap [paddedPlaintext] for [destination] so the
+     * server cannot see who sent it. [senderCertificate] is the server-issued
+     * certificate proving our identity. [RealBridge] (JVM/Android) overrides this.
+     */
+    public open suspend fun sealedSenderEncrypt(
+        localUuid: String,
+        localDeviceId: Int,
+        destination: ProtocolAddress,
+        senderCertificate: ByteArray,
+        paddedPlaintext: ByteArray,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.Failure(
+            io.krypton.core.result.CryptoError.internal("Sealed sender is not implemented on this platform yet."),
+        )
+
+    /**
+     * Sealed-sender decrypt: open a sealed message, validating the sender's
+     * certificate against [trustRoot] (the server's trust-root public key).
+     */
+    public open suspend fun sealedSenderDecrypt(
+        localUuid: String,
+        localDeviceId: Int,
+        trustRoot: ByteArray,
+        sealedMessage: ByteArray,
+        timestampMillis: Long,
+    ): CryptoResult<io.krypton.protocol.models.SealedSenderMessage> =
+        CryptoResult.Failure(
+            io.krypton.core.result.CryptoError.internal("Sealed sender is not implemented on this platform yet."),
+        )
 }
 
 /**

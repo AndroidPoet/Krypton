@@ -156,6 +156,24 @@ public class KryptonProtocolImpl internal constructor(
     ): CryptoResult<io.krypton.protocol.models.SafetyNumber> =
         bridge.computeSafetyNumber(localStableId, remoteStableId, remoteIdentityKey, iterations)
 
+    override suspend fun sealedSenderEncrypt(
+        localUuid: String,
+        localDeviceId: Int,
+        destination: ProtocolAddress,
+        senderCertificate: ByteArray,
+        paddedPlaintext: ByteArray,
+    ): CryptoResult<ByteArray> =
+        bridge.sealedSenderEncrypt(localUuid, localDeviceId, destination, senderCertificate, paddedPlaintext)
+
+    override suspend fun sealedSenderDecrypt(
+        localUuid: String,
+        localDeviceId: Int,
+        trustRoot: ByteArray,
+        sealedMessage: ByteArray,
+        timestampMillis: Long,
+    ): CryptoResult<io.krypton.protocol.models.SealedSenderMessage> =
+        bridge.sealedSenderDecrypt(localUuid, localDeviceId, trustRoot, sealedMessage, timestampMillis)
+
     override fun close() {
         // Release any native resources if needed
     }

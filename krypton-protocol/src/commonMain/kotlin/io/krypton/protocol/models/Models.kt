@@ -127,3 +127,35 @@ public data class SafetyNumber(
 
     override fun toString(): String = "SafetyNumber($displayText)"
 }
+
+/**
+ * The result of decrypting a sealed-sender message: the recovered plaintext plus
+ * the now-revealed sender identity. Mirrors libsignal's sealed-sender decrypt result.
+ *
+ * @property senderUuid     The sender's UUID (hidden from the server, revealed here).
+ * @property senderDeviceId The sender's device id.
+ * @property message        The recovered (padded) plaintext bytes.
+ */
+public data class SealedSenderMessage(
+    val senderUuid: String,
+    val senderDeviceId: Int,
+    val message: ByteArray,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is SealedSenderMessage) return false
+        return senderUuid == other.senderUuid &&
+            senderDeviceId == other.senderDeviceId &&
+            message.contentEquals(other.message)
+    }
+
+    override fun hashCode(): Int {
+        var r = senderUuid.hashCode()
+        r = 31 * r + senderDeviceId
+        r = 31 * r + message.contentHashCode()
+        return r
+    }
+
+    override fun toString(): String =
+        "SealedSenderMessage(sender=$senderUuid.$senderDeviceId, size=${message.size})"
+}

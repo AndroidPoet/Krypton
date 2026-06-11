@@ -226,6 +226,42 @@ public class RealBridge(
             )
         }
 
+    override suspend fun sealedSenderEncrypt(
+        localUuid: String,
+        localDeviceId: Int,
+        destination: ProtocolAddress,
+        senderCertificate: ByteArray,
+        paddedPlaintext: ByteArray,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.catching {
+            val cipher = org.signal.libsignal.metadata.SealedSessionCipher(
+                signalStores, UUID.fromString(localUuid), null, localDeviceId,
+            )
+            val cert = org.signal.libsignal.metadata.certificate.SenderCertificate(senderCertificate)
+            val destAddress = SignalProtocolAddress(destination.name, destination.deviceId.value)
+            cipher.encrypt(destAddress, cert, paddedPlaintext)
+        }
+
+    override suspend fun sealedSenderDecrypt(
+        localUuid: String,
+        localDeviceId: Int,
+        trustRoot: ByteArray,
+        sealedMessage: ByteArray,
+        timestampMillis: Long,
+    ): CryptoResult<io.krypton.protocol.models.SealedSenderMessage> =
+        CryptoResult.catching {
+            val cipher = org.signal.libsignal.metadata.SealedSessionCipher(
+                signalStores, UUID.fromString(localUuid), null, localDeviceId,
+            )
+            val validator = org.signal.libsignal.metadata.certificate.CertificateValidator(ECPublicKey(trustRoot))
+            val result = cipher.decrypt(validator, sealedMessage, timestampMillis)
+            io.krypton.protocol.models.SealedSenderMessage(
+                senderUuid = result.senderUuid,
+                senderDeviceId = result.deviceId,
+                message = result.paddedMessage,
+            )
+        }
+
     private companion object {
         // Fingerprint format version (Signal uses 0).
         const val FINGERPRINT_VERSION: Int = 0

@@ -14,7 +14,12 @@ import io.krypton.storage.memory.InMemoryIdentityKeyStore
 import io.krypton.storage.memory.InMemoryPreKeyStore
 import io.krypton.storage.memory.InMemorySenderKeyStore
 import io.krypton.storage.memory.InMemorySessionStore
+import org.signal.libsignal.metadata.certificate.ServerCertificate
+import org.signal.libsignal.protocol.ecc.ECPrivateKey
+import org.signal.libsignal.protocol.ecc.ECPublicKey
+import java.util.Optional
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -252,6 +257,49 @@ class VerifiedProductionTest {
             snAlice.displayText, fromBob.getOrNull()!!.displayText,
             "Safety number must be identical on both sides of the conversation",
         )
+    }
+
+    @Test
+    fun `sealed sender roundtrip with real libsignal and server certificate`() = runBlocking {
+        // Sealed sender is UUID-based.
+        val aliceUuid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val bobUuid = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+
+        val (alice, _) = createProtocolWithPreKeys()
+        val (bob, _) = createProtocolWithPreKeys()
+        val bobAddress = ProtocolAddress(bobUuid, DeviceId(1))
+
+        // The sender (Alice) needs a session with the destination (Bob).
+        alice.processPreKeyBundle(bob.getPreKeyBundle(bobAddress).getOrNull()!!).getOrThrow()
+
+        // Build a trust root + server cert + Alice's sender cert with real libsignal.
+        // Generate the trust-root and server keypairs via Krypton, then rebuild EC keys.
+        val trustRootKp = alice.generatePreKeys(100, 1).getOrNull()!!.first().keyPair
+        val serverKp = alice.generatePreKeys(101, 1).getOrNull()!!.first().keyPair
+        val trustRootPriv = ECPrivateKey(trustRootKp.privateKey.bytes)
+        val trustRootPub = ECPublicKey(trustRootKp.publicKey.bytes)
+        val serverPriv = ECPrivateKey(serverKp.privateKey.bytes)
+        val serverPub = ECPublicKey(serverKp.publicKey.bytes)
+
+        val serverCert = ServerCertificate(trustRootPriv, 1, serverPub)
+        val aliceIdentityPub = ECPublicKey(alice.identityKeyPair.identityKey.publicKey.bytes)
+        val expiration = 10_000L
+        val senderCert = serverCert.issue(serverPriv, aliceUuid, Optional.empty(), 1, aliceIdentityPub, expiration)
+
+        // Alice sealed-sends to Bob — the server can't see it's from Alice.
+        val plaintext = "anonymous hello".encodeToByteArray()
+        val sealedResult = alice.sealedSenderEncrypt(aliceUuid, 1, bobAddress, senderCert.serialized, plaintext)
+        assertTrue(sealedResult.isSuccess, "Sealed encrypt should succeed: ${sealedResult.errorOrNull()}")
+        val sealed = sealedResult.getOrNull()!!
+
+        // Bob opens it (timestamp before expiration), validating against the trust root.
+        val openedResult = bob.sealedSenderDecrypt(bobUuid, 1, trustRootPub.serialize(), sealed, 5_000L)
+        assertTrue(openedResult.isSuccess, "Sealed decrypt should succeed: ${openedResult.errorOrNull()}")
+        val opened = openedResult.getOrNull()!!
+
+        assertEquals(aliceUuid, opened.senderUuid, "Sender identity should be revealed on decrypt")
+        assertEquals(1, opened.senderDeviceId)
+        assertContentEquals(plaintext, opened.message, "Recovered plaintext should match")
     }
 }
 

@@ -66,11 +66,11 @@ Krypton aims to mirror Signal's libraries so you can follow libsignal's docs. Cu
 |---|---|---|
 | Protocol (X3DH, Double Ratchet, sessions, pre-keys) | `krypton-protocol` | ✅ Implemented (JVM/Android/Apple) |
 | Fingerprints / safety numbers | `KryptonProtocol.safetyNumber(...)` | ✅ Implemented (JVM/Android) |
-| Sealed sender | `krypton-sealed-sender` | 🚧 Stub — needs server certificates |
+| Sealed sender | `KryptonProtocol.sealedSender*` / `SealedSender` | ✅ Implemented (JVM/Android) |
 | ZK group credentials | `krypton-zkgroup` | 🚧 Stub |
 | Standalone Double Ratchet | `krypton-double-ratchet` | ⛔ Fails loud — use `KryptonProtocol` (ratchet runs inside libsignal) |
 
-> Safety numbers are backed by libsignal's `NumericFingerprintGenerator` and verified by a real-crypto test (both parties compute the identical number). The 🚧 stub modules still return placeholder results — **do not** rely on them for security. The standalone double-ratchet now **fails loud** instead of returning fake key material.
+> Safety numbers and sealed sender are backed by real libsignal (`NumericFingerprintGenerator`, `SealedSessionCipher`) and verified by real-crypto tests (safety numbers match on both sides; sealed sender round-trips through a server-issued certificate). On platforms where the native bridge hasn't wired a feature yet, it **fails loud** rather than faking. `zkgroup` remains a 🚧 stub — do not rely on it. The standalone `double-ratchet` now **fails loud** instead of returning fake key material.
 
 ## Architecture
 
