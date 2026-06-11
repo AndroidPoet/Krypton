@@ -18,6 +18,8 @@ dependencies {
 ```
 
 > **Status:** not yet published to Maven Central — see [Publishing](#publishing). Until then, build locally with `./gradlew publishToMavenLocal` and add `mavenLocal()` to your repositories.
+>
+> 📋 For a full snapshot of what's real, verified, and pending, see **[STATUS.md](STATUS.md)**.
 
 ## Quick start (the stupid-simple API)
 
