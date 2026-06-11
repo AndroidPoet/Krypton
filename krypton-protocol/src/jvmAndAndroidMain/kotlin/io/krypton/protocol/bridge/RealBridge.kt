@@ -204,6 +204,32 @@ public class RealBridge(
 
             KyberPreKeyResult(keyId, kyberPubBytes, signature)
         }
+
+    override fun computeSafetyNumber(
+        localStableId: ByteArray,
+        remoteStableId: ByteArray,
+        remoteIdentityKey: ByteArray,
+        iterations: Int,
+    ): CryptoResult<io.krypton.protocol.models.SafetyNumber> =
+        CryptoResult.catching {
+            val generator = org.signal.libsignal.protocol.fingerprint.NumericFingerprintGenerator(iterations)
+            val localIdentity = SignalIdentityKey(ECPublicKey(identityKeyPair.identityKey.publicKey.bytes))
+            val remoteIdentity = SignalIdentityKey(ECPublicKey(remoteIdentityKey))
+            val fingerprint = generator.createFor(
+                /* version = */ FINGERPRINT_VERSION,
+                localStableId, localIdentity,
+                remoteStableId, remoteIdentity,
+            )
+            io.krypton.protocol.models.SafetyNumber(
+                displayText = fingerprint.displayableFingerprint.displayText,
+                scannable = fingerprint.scannableFingerprint.serialized,
+            )
+        }
+
+    private companion object {
+        // Fingerprint format version (Signal uses 0).
+        const val FINGERPRINT_VERSION: Int = 0
+    }
 }
 
 /**

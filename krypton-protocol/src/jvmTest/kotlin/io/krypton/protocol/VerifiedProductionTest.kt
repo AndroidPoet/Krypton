@@ -230,6 +230,29 @@ class VerifiedProductionTest {
         val ciphertext = result.getOrNull()!!
         assertTrue(ciphertext.serialized.isNotEmpty())
     }
+
+    @Test
+    fun `safety number is identical for both parties with real libsignal`() = runBlocking {
+        val alice = KryptonConfigurator().build()
+        val bob = KryptonConfigurator().build()
+        val aliceId = alice.identityKeyPair.identityKey.publicKey.bytes
+        val bobId = bob.identityKeyPair.identityKey.publicKey.bytes
+
+        // Alice's view: local = Alice, remote = Bob.
+        val fromAlice = alice.safetyNumber("alice".encodeToByteArray(), "bob".encodeToByteArray(), bobId)
+        assertTrue(fromAlice.isSuccess, "safetyNumber should succeed: ${fromAlice.errorOrNull()}")
+        val snAlice = fromAlice.getOrNull()!!
+        assertTrue(snAlice.displayText.isNotEmpty(), "Safety number text should not be empty")
+
+        // Bob's view: local = Bob, remote = Alice. Signal safety numbers are the
+        // same for both participants — so the display text must match.
+        val fromBob = bob.safetyNumber("bob".encodeToByteArray(), "alice".encodeToByteArray(), aliceId)
+        assertTrue(fromBob.isSuccess, "safetyNumber should succeed: ${fromBob.errorOrNull()}")
+        assertEquals(
+            snAlice.displayText, fromBob.getOrNull()!!.displayText,
+            "Safety number must be identical on both sides of the conversation",
+        )
+    }
 }
 
 /**

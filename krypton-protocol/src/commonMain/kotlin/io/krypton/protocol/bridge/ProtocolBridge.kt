@@ -80,6 +80,24 @@ public abstract class Bridge(
     public abstract fun generateKyberPreKey(
         keyId: Int,
     ): CryptoResult<KyberPreKeyResult>
+
+    /**
+     * Compute the safety number (fingerprint) between this device's identity and
+     * a remote identity. Uses [identityKeyPair] as the local key.
+     *
+     * Open with a fail-loud default so platforms that haven't wired it yet report
+     * clearly instead of returning a fake value. [RealBridge] (JVM/Android)
+     * overrides this with libsignal's `NumericFingerprintGenerator`.
+     */
+    public open fun computeSafetyNumber(
+        localStableId: ByteArray,
+        remoteStableId: ByteArray,
+        remoteIdentityKey: ByteArray,
+        iterations: Int,
+    ): CryptoResult<io.krypton.protocol.models.SafetyNumber> =
+        CryptoResult.Failure(
+            io.krypton.core.result.CryptoError.internal("Safety numbers are not implemented on this platform yet."),
+        )
 }
 
 /**

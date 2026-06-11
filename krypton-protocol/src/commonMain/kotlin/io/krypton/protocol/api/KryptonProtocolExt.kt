@@ -122,3 +122,19 @@ public suspend fun KryptonProtocol.decrypt(
             decrypt(ProtocolAddress(name, DeviceId(deviceId)), CiphertextMessage(inferMessageType(raw), raw))
         }
         .map { it.decodeToString() }
+
+/**
+ * Compute the safety number between us ([localId]) and a remote user ([remoteId])
+ * using string identifiers (UTF-8 encoded), given their identity public key.
+ *
+ * ```
+ * val sn = krypton.safetyNumber("me", "alice", aliceIdentityKeyBytes).getOrThrow()
+ * println(sn.displayText)   // compare this out-of-band with Alice
+ * ```
+ */
+public fun KryptonProtocol.safetyNumber(
+    localId: String,
+    remoteId: String,
+    remoteIdentityKey: ByteArray,
+): CryptoResult<io.krypton.protocol.models.SafetyNumber> =
+    safetyNumber(localId.encodeToByteArray(), remoteId.encodeToByteArray(), remoteIdentityKey)

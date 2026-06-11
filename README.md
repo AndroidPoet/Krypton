@@ -62,15 +62,15 @@ Compiles on all of the above; **real E2EE runs on JVM, Android, iOS, and macOS**
 
 Krypton aims to mirror Signal's libraries so you can follow libsignal's docs. Current coverage:
 
-| libsignal area | Krypton module | Status |
+| libsignal area | Krypton API | Status |
 |---|---|---|
-| Protocol (X3DH, Double Ratchet, sessions, pre-keys) | `krypton-protocol` | ✅ Implemented |
-| Sealed sender | `krypton-sealed-sender` | 🚧 Stub — not wired to the bridge |
+| Protocol (X3DH, Double Ratchet, sessions, pre-keys) | `krypton-protocol` | ✅ Implemented (JVM/Android/Apple) |
+| Fingerprints / safety numbers | `KryptonProtocol.safetyNumber(...)` | ✅ Implemented (JVM/Android) |
+| Sealed sender | `krypton-sealed-sender` | 🚧 Stub — needs server certificates |
 | ZK group credentials | `krypton-zkgroup` | 🚧 Stub |
-| Standalone Double Ratchet | `krypton-double-ratchet` | 🚧 Stub (the protocol path uses the real ratchet) |
-| Fingerprints / safety numbers | — | ⛔ Planned |
+| Standalone Double Ratchet | `krypton-double-ratchet` | ⛔ Fails loud — use `KryptonProtocol` (ratchet runs inside libsignal) |
 
-> 🚧 modules currently return placeholder results — **do not** rely on them for security yet. Track full parity in the issues.
+> Safety numbers are backed by libsignal's `NumericFingerprintGenerator` and verified by a real-crypto test (both parties compute the identical number). The 🚧 stub modules still return placeholder results — **do not** rely on them for security. The standalone double-ratchet now **fails loud** instead of returning fake key material.
 
 ## Architecture
 

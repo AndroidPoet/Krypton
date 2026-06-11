@@ -1,5 +1,6 @@
 package io.krypton.doubleratchet.api
 
+import io.krypton.core.result.CryptoError
 import io.krypton.core.result.CryptoResult
 import io.krypton.core.types.PrivateKey
 import io.krypton.core.types.PublicKey
@@ -26,8 +27,12 @@ public class DoubleRatchet {
      * the current one. Used after each message send/receive.
      */
     public fun symmetricRatchet(currentChainKey: ByteArray): CryptoResult<ByteArray> =
-        // In production: HKDF(ChainKey, "KryptonRatchet") -> new key
-        CryptoResult.Success(currentChainKey)
+        // NOT IMPLEMENTED. The real Double Ratchet runs inside libsignal and is
+        // driven automatically by KryptonProtocol.encrypt/decrypt — use those.
+        // This standalone module is a placeholder; it must NOT return a fake key.
+        CryptoResult.Failure(
+            CryptoError.internal("Standalone DoubleRatchet is not implemented — use KryptonProtocol (the ratchet runs inside libsignal)."),
+        )
 
     /**
      * Performs a Diffie-Hellman ratchet step, deriving a new root key
@@ -38,12 +43,12 @@ public class DoubleRatchet {
         ourPrivate: PrivateKey,
         theirPublic: PublicKey,
     ): CryptoResult<RatchetOutput> =
-        // In production: DH(ourPriv, theirPub) -> HKDF(rootKey, dhOutput)
-        CryptoResult.Success(RatchetOutput(
-            rootKey = rootKey,
-            chainKey = ourPrivate.bytes,
-            messageKey = theirPublic.bytes,
-        ))
+        // NOT IMPLEMENTED. Previously returned the private key as the chain key —
+        // a security hole. The real DH ratchet runs inside libsignal via
+        // KryptonProtocol. Fail loud instead of returning fake material.
+        CryptoResult.Failure(
+            CryptoError.internal("Standalone DoubleRatchet is not implemented — use KryptonProtocol (the ratchet runs inside libsignal)."),
+        )
 }
 
 /**

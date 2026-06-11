@@ -105,3 +105,25 @@ public data class CiphertextMessage(
 
     override fun toString(): String = "CiphertextMessage(type=$type, size=${serialized.size})"
 }
+
+/**
+ * A safety number (fingerprint) between the local identity and a remote identity,
+ * used to verify there is no man-in-the-middle. Mirrors libsignal's `Fingerprint`.
+ *
+ * @property displayText The human-readable safety number (compare out-of-band).
+ * @property scannable   The serialized scannable fingerprint (for QR comparison).
+ */
+public data class SafetyNumber(
+    val displayText: String,
+    val scannable: ByteArray,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is SafetyNumber) return false
+        return displayText == other.displayText && scannable.contentEquals(other.scannable)
+    }
+
+    override fun hashCode(): Int = 31 * displayText.hashCode() + scannable.contentHashCode()
+
+    override fun toString(): String = "SafetyNumber($displayText)"
+}

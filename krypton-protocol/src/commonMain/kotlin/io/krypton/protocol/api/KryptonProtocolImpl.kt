@@ -148,6 +148,14 @@ public class KryptonProtocolImpl internal constructor(
     ): CryptoResult<ByteArray> =
         CryptoResult.Failure(io.krypton.core.result.CryptoError.internal("Group decryption not yet wired"))
 
+    override fun safetyNumber(
+        localStableId: ByteArray,
+        remoteStableId: ByteArray,
+        remoteIdentityKey: ByteArray,
+        iterations: Int,
+    ): CryptoResult<io.krypton.protocol.models.SafetyNumber> =
+        bridge.computeSafetyNumber(localStableId, remoteStableId, remoteIdentityKey, iterations)
+
     override fun close() {
         // Release any native resources if needed
     }

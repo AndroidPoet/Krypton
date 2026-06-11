@@ -4,6 +4,7 @@ import io.krypton.core.result.CryptoResult
 import io.krypton.core.types.*
 import io.krypton.protocol.models.CiphertextMessage
 import io.krypton.protocol.models.PreKeyBundle
+import io.krypton.protocol.models.SafetyNumber
 
 /**
  * The core Signal Protocol operations exposed by Krypton.
@@ -118,4 +119,23 @@ public interface KryptonProtocol : AutoCloseable {
         sender: ProtocolAddress,
         ciphertext: ByteArray,
     ): CryptoResult<ByteArray>
+
+    // ── Identity verification (safety numbers) ─────────────────────────────
+
+    /**
+     * Computes the safety number between this device's identity and a remote
+     * identity, so two users can verify out-of-band that there is no MITM
+     * (Signal's "safety numbers" / fingerprint).
+     *
+     * @param localStableId   A stable identifier for us (e.g. our user id bytes).
+     * @param remoteStableId  A stable identifier for the remote (their user id bytes).
+     * @param remoteIdentityKey The remote party's identity public key bytes.
+     * @param iterations      Hash iterations; Signal uses 5200 (the default).
+     */
+    public fun safetyNumber(
+        localStableId: ByteArray,
+        remoteStableId: ByteArray,
+        remoteIdentityKey: ByteArray,
+        iterations: Int = 5200,
+    ): CryptoResult<SafetyNumber>
 }
