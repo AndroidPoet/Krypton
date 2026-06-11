@@ -1,0 +1,67 @@
+name: Build libsignal_ffi
+
+# Rebuilds the native libsignal_ffi static libraries that the Apple/native
+# cinterop links against. Run this whenever the libsignal version is bumped.
+#
+# NOTE: manual-only (workflow_dispatch) — provide the target version. Nothing
+# runs automatically. The produced .a files are uploaded as build artifacts;
+# they are NOT committed to git (libsignal_ffi.a is >100 MB — see .gitignore).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'libsignal version to build (e.g. 0.96.0)'
+        required: true
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            targets: 'aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios'
+          - os: ubuntu-latest
+            targets: 'x86_64-unknown-linux-gnu'
+          - os: windows-latest
+            targets: 'x86_64-pc-windows-gnu'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout libsignal @ v${{ inputs.version }}
+        uses: actions/checkout@v4
+        with:
+          repository: signalapp/libsignal
+          ref: v${{ inputs.version }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Add Rust targets
+        shell: bash
+        run: rustup target add ${{ matrix.targets }}
+
+      # The exact crate name / build invocation should match libsignal's current
+      # build docs (rust/bridge/ffi). Adjust here if libsignal changes its layout.
+      - name: Build libsignal_ffi per target
+        shell: bash
+        run: |
+          for t in ${{ matrix.targets }}; do
+            echo "::group::$t"
+            cargo build -p libsignal-ffi --release --target "$t"
+            echo "::endgroup::"
+          done
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p out
+          find target -name 'libsignal_ffi.a' -o -name 'signal_ffi.a' | while read -r f; do
+            cp "$f" "out/$(echo "$f" | tr '/' '_')"
+          done
+          ls -lh out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libsignal_ffi-${{ inputs.version }}-${{ matrix.os }}
+          path: out/
+          if-no-files-found: error

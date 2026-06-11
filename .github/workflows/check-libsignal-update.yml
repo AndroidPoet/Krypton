@@ -1,0 +1,62 @@
+name: Check for libsignal update
+
+# Watches signalapp/libsignal for new releases and opens a PR bumping the
+# JVM/Android Maven coordinates in gradle/libs.versions.toml.
+#
+# NOTE: manual-only for now (workflow_dispatch). The weekly `schedule:` below is
+# intentionally commented out so nothing runs automatically while the repo is
+# private. Uncomment it once the repo is public to enable weekly polling.
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '0 6 * * 1'   # Mondays 06:00 UTC
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve current vs latest libsignal version
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current=$(grep -oE 'org\.signal:libsignal-client", version = "[^"]+"' gradle/libs.versions.toml \
+                    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          latest=$(gh api repos/signalapp/libsignal/releases/latest --jq .tag_name | sed 's/^v//')
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest"   >> "$GITHUB_OUTPUT"
+          echo "libsignal: current=$current latest=$latest"
+
+      - name: Open bump PR if a newer version exists
+        if: steps.v.outputs.current != steps.v.outputs.latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT: ${{ steps.v.outputs.current }}
+          LATEST: ${{ steps.v.outputs.latest }}
+        run: |
+          branch="chore/libsignal-$LATEST"
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          # Bump both client + android coordinates to the new version.
+          sed -i -E "s/(org\.signal:libsignal-(client|android)\", version = \")[^\"]+/\1$LATEST/g" \
+            gradle/libs.versions.toml
+          git commit -am "chore: bump libsignal $CURRENT -> $LATEST"
+          git push -u origin "$branch" --force
+          gh pr create --title "chore: bump libsignal to $LATEST" --body "$(cat <<EOF
+          Automated: Signal released **libsignal $LATEST** (was \`$CURRENT\`).
+
+          ✅ This PR bumps the **JVM/Android** Maven coordinates automatically.
+
+          ⚠️ **Manual follow-up required before merge:**
+          - Rebuild the **Apple/native** \`libsignal_ffi.a\` at \`$LATEST\` via the *Build libsignal_ffi* workflow (or \`scripts/build-libsignal-ffi.sh $LATEST\`).
+          - If the FFI ABI changed, update \`krypton_adapter.c\` and \`NativeBridge.kt\` cinterop bindings.
+          - Cross-platform interop tests (encrypt on JVM ↔ decrypt on iOS) must pass — JVM and native must be on the **same** libsignal version or messaging breaks across platforms.
+          EOF
+          )"
