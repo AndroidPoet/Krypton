@@ -1,5 +1,7 @@
 package io.krypton.core.types
 
+import kotlin.jvm.JvmInline
+
 // ── Core key types ─────────────────────────────────────────────────────────
 
 public class PublicKey(public val bytes: ByteArray) {

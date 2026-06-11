@@ -131,16 +131,16 @@ public class FakeBridge(
         for (w in words) {
             state[0] = state[0] xor w
             for (round in 0 until 16) {
-                state[round % 8] = Integer.rotateLeft(state[round % 8] xor state[(round + 1) % 8], 7) +
+                state[round % 8] = (state[round % 8] xor state[(round + 1) % 8]).rotateLeft(7) +
                     (round * 0x9E3779B9).toInt()
-                state[(round + 1) % 8] = state[(round + 1) % 8] xor Integer.rotateRight(state[round % 8], 13)
+                state[(round + 1) % 8] = state[(round + 1) % 8] xor state[round % 8].rotateRight(13)
             }
         }
 
         // Final mix
         for (i in 0 until 8) {
-            state[i] = state[i] xor Integer.rotateLeft(state[(i + 3) % 8], 17)
-            state[(i + 5) % 8] = state[(i + 5) % 8] + Integer.rotateRight(state[i], 11)
+            state[i] = state[i] xor state[(i + 3) % 8].rotateLeft(17)
+            state[(i + 5) % 8] = state[(i + 5) % 8] + state[i].rotateRight(11)
         }
 
         return state.flatMap { int ->

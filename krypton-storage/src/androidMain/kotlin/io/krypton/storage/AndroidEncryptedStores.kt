@@ -1,17 +1,17 @@
 package io.krypton.storage
 
 import android.content.Context
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
 import io.krypton.storage.api.IdentityKeyStore
 import io.krypton.storage.api.PreKeyStore
 import io.krypton.storage.api.SenderKeyStore
 import io.krypton.storage.api.SessionStore
-import java.security.KeyStore
-import javax.crypto.KeyGenerator
 
 /**
  * Android production stores using EncryptedSharedPreferences + Android Keystore.
+ *
+ * NOTE: scaffold only — the store wiring is not implemented yet. Use
+ * [io.krypton.storage.memory.InMemoryStores] for working storage today.
+ * Wiring this up requires `androidx.security:security-crypto`.
  *
  * ```
  * val stores = AndroidEncryptedStores(context, identityKeyPair, regId)
@@ -22,21 +22,12 @@ public class AndroidEncryptedStores(
     identityKeyPair: io.krypton.core.types.IdentityKeyPair,
     registrationId: Int,
 ) {
-    private val prefs = androidx.security.crypto.EncryptedSharedPreferences.create(
-        "krypton_storage",
-        generateOrGetMasterKey(),
-        context,
-        androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-    )
-
-    public val identityKeyStore: IdentityKeyStore = TODO("Wire AndroidKeystoreIdentityStore")
-    public val preKeyStore: PreKeyStore = TODO("Wire EncryptedSharedPrefs PreKeyStore")
-    public val sessionStore: SessionStore = TODO("Wire EncryptedSharedPrefs SessionStore")
-    public val senderKeyStore: SenderKeyStore = TODO("Wire SenderKeyStore")
-
-    private fun generateOrGetMasterKey(): android.security.keystore.KeyGenParameterSpec? {
-        // In production, wire properly with AndroidKeyStore
-        return null
-    }
+    public val identityKeyStore: IdentityKeyStore
+        get() = TODO("Wire AndroidKeystore + EncryptedSharedPreferences IdentityStore")
+    public val preKeyStore: PreKeyStore
+        get() = TODO("Wire EncryptedSharedPrefs PreKeyStore")
+    public val sessionStore: SessionStore
+        get() = TODO("Wire EncryptedSharedPrefs SessionStore")
+    public val senderKeyStore: SenderKeyStore
+        get() = TODO("Wire SenderKeyStore")
 }

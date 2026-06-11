@@ -4,7 +4,6 @@ import io.krypton.storage.api.IdentityKeyStore
 import io.krypton.storage.api.PreKeyStore
 import io.krypton.storage.api.SenderKeyStore
 import io.krypton.storage.api.SessionStore
-import java.io.File
 
 /**
  * Linux production stores using the Secret Service API (dbus secret-storage)
@@ -17,10 +16,8 @@ import java.io.File
 public class LinuxSecretServiceStores(
     identityKeyPair: io.krypton.core.types.IdentityKeyPair,
     registrationId: Int,
-    private val storagePath: String = "${System.getProperty("user.home")}/.config/krypton",
+    private val storagePath: String = ".config/krypton",
 ) {
-    init { File(storagePath).mkdirs() }
-
     public val identityKeyStore: IdentityKeyStore
         get() = TODO("Wire SecretService IdentityStore or FileBased")
     public val preKeyStore: PreKeyStore

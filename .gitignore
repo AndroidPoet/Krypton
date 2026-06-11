@@ -10,3 +10,8 @@ local.properties
 .cxx
 captures
 .externalNativeBuild
+
+# Prebuilt native crypto binaries (build artifacts — exceed GitHub size limits)
+*.a
+*.o
+krypton-protocol/libs/**/*.jar

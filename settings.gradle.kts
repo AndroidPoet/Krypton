@@ -17,7 +17,7 @@ dependencyResolutionManagement {
 rootProject.name = "krypton"
 
 include(":krypton-core")
-include(":krypton-factory")
+include(":krypton")
 include(":krypton-storage")
 include(":krypton-protocol")
 include(":krypton-sealed-sender")

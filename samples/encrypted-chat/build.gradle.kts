@@ -20,9 +20,8 @@ android {
 }
 
 dependencies {
-    implementation(project(":krypton-factory"))
-    implementation(project(":krypton-protocol"))
-    implementation(project(":krypton-storage"))
+    // Single dependency — re-exports core + storage + protocol transitively.
+    implementation(project(":krypton"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
 }

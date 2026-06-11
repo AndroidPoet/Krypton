@@ -3,6 +3,7 @@ package io.krypton
 import io.krypton.core.result.KryptonDsl
 import io.krypton.protocol.api.KryptonConfigurator
 import io.krypton.protocol.api.KryptonProtocol
+import kotlin.jvm.JvmStatic
 
 /**
  * The main entry point to the Krypton encryption library.

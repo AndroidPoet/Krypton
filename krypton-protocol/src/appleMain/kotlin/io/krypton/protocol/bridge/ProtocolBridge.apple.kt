@@ -5,10 +5,13 @@ import io.krypton.core.types.*
 /**
  * Apple platform bridge factory (iOS, macOS, tvOS, watchOS via Kotlin/Native).
  *
- * Returns a bridge that fails until libsignal_ffi is linked.
- * Build libsignal for Apple platforms:
+ * Creates a [NativeBridge] that calls libsignal_ffi via cinterop.
+ * Requires libsignal_ffi.a to be linked (see build.gradle.kts cinterop config).
+ *
+ * Build libsignal_ffi for Apple platforms:
  *   cargo build -p libsignal-ffi --release --target aarch64-apple-ios
- * Then link via cinterop.
+ *   cargo build -p libsignal-ffi --release --target aarch64-apple-darwin
+ * etc.
  */
 public actual fun createPlatformBridge(
     identityKeyStore: io.krypton.storage.api.IdentityKeyStore,
@@ -17,23 +20,19 @@ public actual fun createPlatformBridge(
     senderKeyStore: io.krypton.storage.api.SenderKeyStore,
     identityKeyPair: IdentityKeyPair,
     registrationId: RegistrationId,
-): Bridge = NotImplementedBridge(
+): Bridge = NativeBridge(
     identityKeyStore, sessionStore, preKeyStore, senderKeyStore,
-    identityKeyPair, registrationId, "Apple FFI not yet linked — build libsignal_ffi"
+    identityKeyPair, registrationId,
 )
 
 /**
- * Unsupported platform: returns deterministic test keys.
- * Real keys require bundling the native libsignal library.
+ * Apple platform: generates real Curve25519 keys via libsignal_ffi cinterop.
  */
 public actual fun createPlatformIdentityKeyPair(): IdentityKeyPair =
-    IdentityKeyPair(
-        IdentityKey(PublicKey(ByteArray(32) { 1 }), 0),
-        PrivateKey(ByteArray(32) { 2 }),
-    )
+    NativeBridge.generateIdentityKeyPair()
 
 /**
- * Unsupported platform: generates a random valid registration ID.
+ * Apple platform: generates a random valid registration ID.
  */
 public actual fun createPlatformRegistrationId(): RegistrationId =
     RegistrationId(kotlin.random.Random.nextInt(1, 0x3FFF))

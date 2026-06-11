@@ -1,0 +1,5 @@
+headers = krypton_ffi.h
+headerFilter = krypton_ffi.*
+staticLibraries = libsignal_ffi.a libkrypton_adapter.a
+libraryPaths = /Users/ranbirsingh/krypton/krypton-protocol/libs/apple
+compilerOpts = -I/Users/ranbirsingh/krypton/krypton-protocol/libs/apple

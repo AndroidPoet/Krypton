@@ -16,7 +16,7 @@ import io.krypton.storage.api.SessionStore
 public class WindowsCredentialStoreStores(
     identityKeyPair: io.krypton.core.types.IdentityKeyPair,
     registrationId: Int,
-    private val storagePath: String = "${System.getenv("APPDATA")}/krypton",
+    private val storagePath: String = "krypton",
 ) {
     public val identityKeyStore: IdentityKeyStore
         get() = TODO("Wire DPAPI-protected IdentityStore")
