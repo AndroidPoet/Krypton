@@ -6,6 +6,13 @@ serialization = "1.7.3"
 ktor = "3.0.3"
 compose-bom = "2024.12.01"
 activity-compose = "1.9.3"
+# Single source of truth for libsignal across BOTH tracks:
+#  - JVM/Android: the Maven coordinates below (version.ref = "libsignal")
+#  - Apple/native: the prebuilt libsignal_ffi.a, whose version is recorded in
+#    krypton-protocol/libs/apple/VERSION and asserted equal to this by the
+#    :krypton-protocol:verifyLibsignalVersion task (wired into `check`).
+# Bump this ONE value, then rebuild the native .a via scripts/build-libsignal-ffi.sh.
+libsignal = "0.86.5"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -14,8 +21,8 @@ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-t
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
-libsignal-client = { module = "org.signal:libsignal-client", version = "0.86.5" }
-libsignal-android = { module = "org.signal:libsignal-android", version = "0.86.5" }
+libsignal-client = { module = "org.signal:libsignal-client", version.ref = "libsignal" }
+libsignal-android = { module = "org.signal:libsignal-android", version.ref = "libsignal" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

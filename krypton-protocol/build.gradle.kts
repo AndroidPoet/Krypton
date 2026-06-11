@@ -106,8 +106,6 @@ kotlin {
     tvosArm64          { compilations.getByName("main").configureCInterop() }
     tvosX64            { compilations.getByName("main").configureCInterop() }
     tvosSimulatorArm64 { compilations.getByName("main").configureCInterop() }
-
-    // watchOS targets
 }
 
 android {
@@ -115,3 +113,36 @@ android {
     compileSdk = io.krypton.Configuration.COMPILE_SDK
     defaultConfig { minSdk = io.krypton.Configuration.MIN_SDK }
 }
+
+// ── libsignal version-skew guard ─────────────────────────────────────────────
+// Asserts the Apple/native libsignal_ffi.a (recorded in libs/apple/VERSION) is
+// the SAME libsignal version as the JVM/Android Maven coordinates (catalog).
+// Mismatched versions can produce incompatible session/wire formats, so an
+// iOS user and an Android user could silently fail to talk to each other.
+// Wired into `check` so it fails the build instead of failing users.
+val verifyLibsignalVersion by tasks.registering {
+    group = "verification"
+    description = "Fail if the native libsignal_ffi.a version differs from the JVM/Android Maven version."
+    val mavenVersion = libs.versions.libsignal.get()
+    val versionFile = layout.projectDirectory.file("libs/apple/VERSION").asFile
+    // Capture at configuration time so the task has no project reference at execution.
+    inputs.property("mavenVersion", mavenVersion)
+    doLast {
+        if (!versionFile.exists()) {
+            logger.warn(
+                "verifyLibsignalVersion: ${versionFile.path} not found — native libsignal_ffi.a " +
+                    "not present/built. Skipping skew check (Maven version = $mavenVersion)."
+            )
+            return@doLast
+        }
+        val ffiVersion = versionFile.readText().trim()
+        check(ffiVersion == mavenVersion) {
+            "libsignal version skew: JVM/Android Maven = '$mavenVersion' but native libsignal_ffi.a " +
+                "(libs/apple/VERSION) = '$ffiVersion'. Rebuild the native .a at '$mavenVersion' via " +
+                "scripts/build-libsignal-ffi.sh $mavenVersion, then update libs/apple/VERSION."
+        }
+        logger.lifecycle("verifyLibsignalVersion: OK — both tracks on libsignal $mavenVersion.")
+    }
+}
+
+tasks.named("check") { dependsOn(verifyLibsignalVersion) }

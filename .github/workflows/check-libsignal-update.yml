@@ -26,7 +26,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          current=$(grep -oE 'org\.signal:libsignal-client", version = "[^"]+"' gradle/libs.versions.toml \
+          current=$(grep -oE '^libsignal = "[^"]+"' gradle/libs.versions.toml \
                     | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
           latest=$(gh api repos/signalapp/libsignal/releases/latest --jq .tag_name | sed 's/^v//')
           echo "current=$current" >> "$GITHUB_OUTPUT"
@@ -44,9 +44,8 @@ jobs:
           git config user.name  'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git switch -c "$branch"
-          # Bump both client + android coordinates to the new version.
-          sed -i -E "s/(org\.signal:libsignal-(client|android)\", version = \")[^\"]+/\1$LATEST/g" \
-            gradle/libs.versions.toml
+          # Single source of truth: bump the [versions] libsignal entry.
+          sed -i -E "s/^(libsignal = \")[^\"]+/\1$LATEST/" gradle/libs.versions.toml
           git commit -am "chore: bump libsignal $CURRENT -> $LATEST"
           git push -u origin "$branch" --force
           gh pr create --title "chore: bump libsignal to $LATEST" --body "$(cat <<EOF

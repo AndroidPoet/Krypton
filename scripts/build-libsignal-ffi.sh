@@ -41,5 +41,11 @@ cp "$A_FILE" "$DEST/libsignal_ffi.a"
 H_FILE="$(find . -name 'signal_ffi.h' | head -1 || true)"
 [ -n "$H_FILE" ] && cp "$H_FILE" "$DEST/signal_ffi.h" || echo "WARN: signal_ffi.h not found — keep existing header"
 
+# Record the built version so :krypton-protocol:verifyLibsignalVersion can assert
+# the native .a matches the JVM/Android Maven version (no silent skew).
+echo "$VERSION" > "$DEST/VERSION"
+
 echo "==> Updated $DEST/libsignal_ffi.a to libsignal $VERSION"
+echo "    NOTE: bump 'libsignal' in gradle/libs.versions.toml to '$VERSION' too, or"
+echo "    ./gradlew check will fail on version skew."
 echo "    Remember: the .a is gitignored (>100MB). Distribute via CI artifact / release / git-lfs."

@@ -2,6 +2,7 @@ package io.krypton.protocol.api
 
 import io.krypton.core.encoding.Base64
 import io.krypton.core.result.*
+import io.krypton.core.types.DeviceId
 import io.krypton.core.types.ProtocolAddress
 import io.krypton.protocol.models.CiphertextMessage
 import io.krypton.protocol.models.CiphertextMessageType
@@ -76,3 +77,48 @@ public suspend fun KryptonProtocol.processBundleAndEncrypt(
     plaintext: ByteArray,
 ): CryptoResult<CiphertextMessage> =
     processPreKeyBundle(bundle).flatMap { encrypt(recipient, plaintext) }
+
+// ── Stupid-simple API ────────────────────────────────────────────────────────
+// Strings in, wire-ready Base64 out. No ProtocolAddress / ByteArray /
+// CiphertextMessage to build, no message-type bookkeeping. Recipient/sender are
+// named (device id defaults to the primary device).
+//
+//   val krypton = Krypton.protocol { }                       // zero config
+//   val wire    = krypton.encrypt("alice", "hello").getOrThrow()   // send this
+//   val text    = krypton.decrypt("alice", wire).getOrThrow()      // read it
+
+/**
+ * Encrypt [text] for the recipient named [name] (defaulting to their primary
+ * device) and return a wire-ready Base64 string you can send as-is.
+ *
+ * ```
+ * val wire = krypton.encrypt("alice", "hello").getOrThrow()
+ * ```
+ */
+public suspend fun KryptonProtocol.encrypt(
+    name: String,
+    text: String,
+    deviceId: Int = DeviceId.PRIMARY.value,
+): CryptoResult<String> =
+    encrypt(ProtocolAddress(name, DeviceId(deviceId)), text.encodeToByteArray())
+        .map { Base64.encode(it.serialized) }
+
+/**
+ * Decrypt a wire-ready Base64 string [wire] from the sender named [name]
+ * (defaulting to their primary device) and return the original text. The Signal
+ * message type is inferred from the payload, so you don't track it yourself.
+ *
+ * ```
+ * val text = krypton.decrypt("alice", wire).getOrThrow()
+ * ```
+ */
+public suspend fun KryptonProtocol.decrypt(
+    name: String,
+    wire: String,
+    deviceId: Int = DeviceId.PRIMARY.value,
+): CryptoResult<String> =
+    CryptoResult.catching { Base64.decode(wire) }
+        .flatMap { raw ->
+            decrypt(ProtocolAddress(name, DeviceId(deviceId)), CiphertextMessage(inferMessageType(raw), raw))
+        }
+        .map { it.decodeToString() }
