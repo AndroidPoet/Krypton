@@ -15,6 +15,9 @@ import io.krypton.protocol.models.GroupSecretParamsResult
  *   sealed-send to people who aren't your contacts).
  * - **Profile key version / commitment**: the opaque handles the server uses to
  *   serve and verify a profile without ever seeing the profile key.
+ * - **Group cipher**: encrypt/decrypt member service-ids, profile keys, and
+ *   blobs under the group secret params — how encrypted group state is stored on
+ *   the server without it learning the members. (`ClientZkGroupCipher`.)
  *
  * These are real on JVM/Android and **fail loud** on platforms where the bridge
  * hasn't wired zkgroup yet — they never return a fake/placeholder result.
@@ -52,4 +55,30 @@ public class ZkGroup(
      */
     public fun profileKeyCommitment(profileKey: ByteArray, aciUuid: String): CryptoResult<ByteArray> =
         protocol.profileKeyCommitment(profileKey, aciUuid)
+
+    // ── Group cipher (needs only the group secret params — no server) ────────
+
+    /** Encrypt a member's [serviceId] (ACI/PNI string) under [groupSecretParams]. */
+    public fun encryptServiceId(groupSecretParams: ByteArray, serviceId: String): CryptoResult<ByteArray> =
+        protocol.groupEncryptServiceId(groupSecretParams, serviceId)
+
+    /** Decrypt a `UuidCiphertext` back to its ACI/PNI service-id string. */
+    public fun decryptServiceId(groupSecretParams: ByteArray, uuidCiphertext: ByteArray): CryptoResult<String> =
+        protocol.groupDecryptServiceId(groupSecretParams, uuidCiphertext)
+
+    /** Encrypt a member's [profileKey] for [aciUuid] under [groupSecretParams]. */
+    public fun encryptProfileKey(groupSecretParams: ByteArray, profileKey: ByteArray, aciUuid: String): CryptoResult<ByteArray> =
+        protocol.groupEncryptProfileKey(groupSecretParams, profileKey, aciUuid)
+
+    /** Decrypt a `ProfileKeyCiphertext` for [aciUuid] back to the raw profile key. */
+    public fun decryptProfileKey(groupSecretParams: ByteArray, profileKeyCiphertext: ByteArray, aciUuid: String): CryptoResult<ByteArray> =
+        protocol.groupDecryptProfileKey(groupSecretParams, profileKeyCiphertext, aciUuid)
+
+    /** Encrypt an arbitrary [plaintext] blob (e.g. group title) under [groupSecretParams]. */
+    public fun encryptBlob(groupSecretParams: ByteArray, plaintext: ByteArray): CryptoResult<ByteArray> =
+        protocol.groupEncryptBlob(groupSecretParams, plaintext)
+
+    /** Decrypt a blob produced by [encryptBlob]. */
+    public fun decryptBlob(groupSecretParams: ByteArray, blob: ByteArray): CryptoResult<ByteArray> =
+        protocol.groupDecryptBlob(groupSecretParams, blob)
 }

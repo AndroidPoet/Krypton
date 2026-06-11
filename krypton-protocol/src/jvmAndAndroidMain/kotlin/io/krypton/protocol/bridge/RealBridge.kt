@@ -308,6 +308,69 @@ public class RealBridge(
                 .serialize()
         }
 
+    // ── zkgroup group cipher (real libsignal ClientZkGroupCipher) ──────────
+
+    private fun groupCipher(groupSecretParams: ByteArray) =
+        org.signal.libsignal.zkgroup.groups.ClientZkGroupCipher(
+            org.signal.libsignal.zkgroup.groups.GroupSecretParams(groupSecretParams),
+        )
+
+    override fun groupEncryptServiceId(
+        groupSecretParams: ByteArray,
+        serviceId: String,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.catching {
+            val sid = org.signal.libsignal.protocol.ServiceId.parseFromString(serviceId)
+            groupCipher(groupSecretParams).encrypt(sid).serialize()
+        }
+
+    override fun groupDecryptServiceId(
+        groupSecretParams: ByteArray,
+        uuidCiphertext: ByteArray,
+    ): CryptoResult<String> =
+        CryptoResult.catching {
+            val ct = org.signal.libsignal.zkgroup.groups.UuidCiphertext(uuidCiphertext)
+            groupCipher(groupSecretParams).decrypt(ct).toServiceIdString()
+        }
+
+    override fun groupEncryptProfileKey(
+        groupSecretParams: ByteArray,
+        profileKey: ByteArray,
+        aciUuid: String,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.catching {
+            val aci = org.signal.libsignal.protocol.ServiceId.Aci(UUID.fromString(aciUuid))
+            val pk = org.signal.libsignal.zkgroup.profiles.ProfileKey(profileKey)
+            groupCipher(groupSecretParams).encryptProfileKey(pk, aci).serialize()
+        }
+
+    override fun groupDecryptProfileKey(
+        groupSecretParams: ByteArray,
+        profileKeyCiphertext: ByteArray,
+        aciUuid: String,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.catching {
+            val aci = org.signal.libsignal.protocol.ServiceId.Aci(UUID.fromString(aciUuid))
+            val ct = org.signal.libsignal.zkgroup.groups.ProfileKeyCiphertext(profileKeyCiphertext)
+            groupCipher(groupSecretParams).decryptProfileKey(ct, aci).serialize()
+        }
+
+    override fun groupEncryptBlob(
+        groupSecretParams: ByteArray,
+        plaintext: ByteArray,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.catching {
+            groupCipher(groupSecretParams).encryptBlob(plaintext)
+        }
+
+    override fun groupDecryptBlob(
+        groupSecretParams: ByteArray,
+        blob: ByteArray,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.catching {
+            groupCipher(groupSecretParams).decryptBlob(blob)
+        }
+
     private companion object {
         // Fingerprint format version (Signal uses 0).
         const val FINGERPRINT_VERSION: Int = 0

@@ -363,6 +363,51 @@ class VerifiedProductionTest {
             .serialize()
         assertContentEquals(expectedCommitment, commitmentResult.getOrNull()!!, "Commitment must match libsignal")
     }
+
+    @Test
+    fun `zkgroup group cipher round-trips service-id, profile key, and blob`() = runBlocking {
+        val protocol = KryptonConfigurator().build()
+
+        // A group's secret params (derived deterministically from its master key).
+        val masterKey = ByteArray(32) { (it + 9).toByte() }
+        val secretParams = protocol.deriveGroupSecretParams(masterKey).getOrNull()!!.secretParams
+
+        val aciUuid = "84fd7196-b3fa-4d4d-bbf8-8f1cd1d75f3a"
+
+        // ── Service-id encrypt/decrypt ───────────────────────────────────────
+        val ctResult = protocol.groupEncryptServiceId(secretParams, aciUuid)
+        assertTrue(ctResult.isSuccess, "groupEncryptServiceId should succeed: ${ctResult.errorOrNull()}")
+        val ct = ctResult.getOrNull()!!
+        // Ciphertext hides the member: it is not just the plaintext ACI bytes.
+        assertTrue(ct.isNotEmpty())
+
+        val backResult = protocol.groupDecryptServiceId(secretParams, ct)
+        assertTrue(backResult.isSuccess, "groupDecryptServiceId should succeed: ${backResult.errorOrNull()}")
+        assertEquals(aciUuid, backResult.getOrNull(), "Service-id should round-trip")
+
+        // Cross-check against libsignal directly.
+        val cipher = org.signal.libsignal.zkgroup.groups.ClientZkGroupCipher(
+            org.signal.libsignal.zkgroup.groups.GroupSecretParams(secretParams),
+        )
+        val expectedSid = cipher.decrypt(
+            org.signal.libsignal.zkgroup.groups.UuidCiphertext(ct),
+        ).toServiceIdString()
+        assertEquals(expectedSid, backResult.getOrNull(), "Decrypted service-id must match libsignal")
+
+        // ── Profile-key encrypt/decrypt ──────────────────────────────────────
+        val profileKey = ByteArray(32) { (it * 5 + 1).toByte() }
+        val pkCt = protocol.groupEncryptProfileKey(secretParams, profileKey, aciUuid).getOrNull()!!
+        val pkBack = protocol.groupDecryptProfileKey(secretParams, pkCt, aciUuid)
+        assertTrue(pkBack.isSuccess, "groupDecryptProfileKey should succeed: ${pkBack.errorOrNull()}")
+        assertContentEquals(profileKey, pkBack.getOrNull()!!, "Profile key should round-trip")
+
+        // ── Blob encrypt/decrypt ─────────────────────────────────────────────
+        val title = "Weekend Trip 🏔️".encodeToByteArray()
+        val blob = protocol.groupEncryptBlob(secretParams, title).getOrNull()!!
+        val blobBack = protocol.groupDecryptBlob(secretParams, blob)
+        assertTrue(blobBack.isSuccess, "groupDecryptBlob should succeed: ${blobBack.errorOrNull()}")
+        assertContentEquals(title, blobBack.getOrNull()!!, "Blob should round-trip")
+    }
 }
 
 /**

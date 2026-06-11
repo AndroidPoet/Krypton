@@ -68,10 +68,13 @@ Krypton aims to mirror Signal's libraries so you can follow libsignal's docs. Cu
 | Fingerprints / safety numbers | `KryptonProtocol.safetyNumber(...)` | ✅ Implemented (JVM/Android) |
 | Sealed sender | `KryptonProtocol.sealedSender*` / `SealedSender` | ✅ Implemented (JVM/Android) |
 | zkgroup — group params, profile access key / version / commitment | `krypton-zkgroup` / `KryptonProtocol` | ✅ Implemented (JVM/Android) |
+| zkgroup — group cipher (encrypt member IDs / profile keys / blobs) | `ZkGroup.encrypt*` / `KryptonProtocol.group*` | ✅ Implemented (JVM/Android) |
 | zkgroup — server-issued credentials & membership proofs | — | ⛔ Not provided (needs a credential server) |
-| Standalone Double Ratchet | `krypton-double-ratchet` | ⛔ Fails loud — use `KryptonProtocol` (ratchet runs inside libsignal) |
+| Standalone Double Ratchet | `krypton-double-ratchet` | ⛔ Fails loud — *libsignal has no standalone ratchet either*; use `KryptonProtocol.encrypt/decrypt` |
 
-> Safety numbers, sealed sender, and the client-side zkgroup primitives are backed by real libsignal (`NumericFingerprintGenerator`, `SealedSessionCipher`, `GroupSecretParams`/`ProfileKey`) and verified by real-crypto tests — including byte-for-byte cross-checks against libsignal for the zkgroup derivations. On platforms where the native bridge hasn't wired a feature yet, it **fails loud** rather than faking. The full zkgroup **credential dance** (auth/profile-key credentials, membership presentations) needs a credential-issuing server and is intentionally **not stubbed** — it's absent, not fake. The standalone `double-ratchet` also **fails loud** instead of returning fake key material.
+> Safety numbers, sealed sender, and the client-side zkgroup features (params, profile derivations, **group cipher**) are backed by real libsignal (`NumericFingerprintGenerator`, `SealedSessionCipher`, `GroupSecretParams`/`ProfileKey`/`ClientZkGroupCipher`) and verified by real-crypto tests — including byte-for-byte cross-checks against libsignal and full encrypt→decrypt round-trips. On platforms where the native bridge hasn't wired a feature yet, it **fails loud** rather than faking.
+>
+> Two rows are intentionally ⛔, for different reasons. The zkgroup **credential dance** (auth/profile-key credentials, membership presentations) needs a credential-issuing server, so it's **absent, not stubbed**. The **standalone double ratchet** fails loud because *libsignal itself exposes no bare ratchet* — the ratchet only runs inside a session; `KryptonProtocol.encrypt/decrypt` **is** the double ratchet (X3DH establishes the session, every message advances it), matching libsignal 1:1.
 
 ## Architecture
 
@@ -107,7 +110,7 @@ Not yet published. To make the one-line install real, Krypton needs: CI that bui
 | `krypton-storage` | Store interfaces + in-memory (platform stores are scaffolds) |
 | `krypton-protocol` | Signal Protocol (X3DH, sessions, encrypt/decrypt) + the platform bridges |
 | `krypton-sealed-sender` | Sealed-sender convenience wrapper (real on JVM/Android) |
-| `krypton-zkgroup` | Client-side zkgroup primitives — group params, profile access key/version/commitment (real on JVM/Android) |
+| `krypton-zkgroup` | Client-side zkgroup — group params, profile access key/version/commitment, and the group cipher (real on JVM/Android) |
 | `krypton-double-ratchet` | ⛔ fails loud — the ratchet runs inside `KryptonProtocol`/libsignal |
 
 ## License

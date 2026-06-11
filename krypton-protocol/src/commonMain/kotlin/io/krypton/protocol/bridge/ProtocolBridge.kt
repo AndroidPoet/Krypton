@@ -179,6 +179,69 @@ public abstract class Bridge(
         CryptoResult.Failure(
             io.krypton.core.result.CryptoError.internal("zkgroup is not implemented on this platform yet."),
         )
+
+    // ── zkgroup group cipher (encrypt group state under the group secret params) ──
+
+    /**
+     * Encrypt a member's [serviceId] (an ACI/PNI string) under [groupSecretParams]
+     * into a `UuidCiphertext` — how a member is stored in the encrypted group
+     * directory without the server learning who they are. [RealBridge]
+     * (JVM/Android) overrides with libsignal's `ClientZkGroupCipher`.
+     */
+    public open fun groupEncryptServiceId(
+        groupSecretParams: ByteArray,
+        serviceId: String,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.Failure(
+            io.krypton.core.result.CryptoError.internal("zkgroup is not implemented on this platform yet."),
+        )
+
+    /** Decrypt a `UuidCiphertext` back to its ACI/PNI service-id string. */
+    public open fun groupDecryptServiceId(
+        groupSecretParams: ByteArray,
+        uuidCiphertext: ByteArray,
+    ): CryptoResult<String> =
+        CryptoResult.Failure(
+            io.krypton.core.result.CryptoError.internal("zkgroup is not implemented on this platform yet."),
+        )
+
+    /** Encrypt a member's [profileKey] for [aciUuid] under the group secret params. */
+    public open fun groupEncryptProfileKey(
+        groupSecretParams: ByteArray,
+        profileKey: ByteArray,
+        aciUuid: String,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.Failure(
+            io.krypton.core.result.CryptoError.internal("zkgroup is not implemented on this platform yet."),
+        )
+
+    /** Decrypt a `ProfileKeyCiphertext` for [aciUuid] back to the raw profile key. */
+    public open fun groupDecryptProfileKey(
+        groupSecretParams: ByteArray,
+        profileKeyCiphertext: ByteArray,
+        aciUuid: String,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.Failure(
+            io.krypton.core.result.CryptoError.internal("zkgroup is not implemented on this platform yet."),
+        )
+
+    /** Encrypt an arbitrary [plaintext] blob (e.g. group title) under the group secret params. */
+    public open fun groupEncryptBlob(
+        groupSecretParams: ByteArray,
+        plaintext: ByteArray,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.Failure(
+            io.krypton.core.result.CryptoError.internal("zkgroup is not implemented on this platform yet."),
+        )
+
+    /** Decrypt a blob produced by [groupEncryptBlob]. */
+    public open fun groupDecryptBlob(
+        groupSecretParams: ByteArray,
+        blob: ByteArray,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.Failure(
+            io.krypton.core.result.CryptoError.internal("zkgroup is not implemented on this platform yet."),
+        )
 }
 
 /**

@@ -92,6 +92,25 @@ class ZkGroupTest {
 
         override fun profileKeyCommitment(profileKey: ByteArray, aciUuid: String): CryptoResult<ByteArray> =
             CryptoResult.Success(aciUuid.encodeToByteArray() + profileKey)
+
+        // Reversible fakes: prepend the secret params so we can assert pass-through.
+        override fun groupEncryptServiceId(groupSecretParams: ByteArray, serviceId: String): CryptoResult<ByteArray> =
+            CryptoResult.Success(groupSecretParams + serviceId.encodeToByteArray())
+
+        override fun groupDecryptServiceId(groupSecretParams: ByteArray, uuidCiphertext: ByteArray): CryptoResult<String> =
+            CryptoResult.Success(uuidCiphertext.copyOfRange(groupSecretParams.size, uuidCiphertext.size).decodeToString())
+
+        override fun groupEncryptProfileKey(groupSecretParams: ByteArray, profileKey: ByteArray, aciUuid: String): CryptoResult<ByteArray> =
+            CryptoResult.Success(profileKey + aciUuid.encodeToByteArray())
+
+        override fun groupDecryptProfileKey(groupSecretParams: ByteArray, profileKeyCiphertext: ByteArray, aciUuid: String): CryptoResult<ByteArray> =
+            CryptoResult.Success(profileKeyCiphertext.copyOfRange(0, 32))
+
+        override fun groupEncryptBlob(groupSecretParams: ByteArray, plaintext: ByteArray): CryptoResult<ByteArray> =
+            CryptoResult.Success(byteArrayOf(0x7F) + plaintext)
+
+        override fun groupDecryptBlob(groupSecretParams: ByteArray, blob: ByteArray): CryptoResult<ByteArray> =
+            CryptoResult.Success(blob.copyOfRange(1, blob.size))
     }
 
     private fun createZkGroup(): ZkGroup {
@@ -136,5 +155,24 @@ class ZkGroupTest {
 
         val commitment = zk.profileKeyCommitment(profileKey, aci)
         assertContentEquals(aci.encodeToByteArray() + profileKey, commitment.getOrNull())
+    }
+
+    @Test
+    fun `zkgroup wrapper delegates group cipher operations to the bridge`() {
+        val zk = createZkGroup()
+        val secretParams = ByteArray(289) { it.toByte() }
+        val profileKey = ByteArray(32) { (it + 1).toByte() }
+        val aci = "84fd7196-b3fa-4d4d-bbf8-8f1cd1d75f3a"
+
+        val sidCt = zk.encryptServiceId(secretParams, aci)
+        assertTrue(sidCt.isSuccess)
+        assertEquals(aci, zk.decryptServiceId(secretParams, sidCt.getOrNull()!!).getOrNull())
+
+        val pkCt = zk.encryptProfileKey(secretParams, profileKey, aci)
+        assertTrue(pkCt.isSuccess)
+        assertContentEquals(profileKey, zk.decryptProfileKey(secretParams, pkCt.getOrNull()!!, aci).getOrNull())
+
+        val blob = zk.encryptBlob(secretParams, "hi".encodeToByteArray())
+        assertContentEquals("hi".encodeToByteArray(), zk.decryptBlob(secretParams, blob.getOrNull()!!).getOrNull())
     }
 }

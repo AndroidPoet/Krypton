@@ -197,4 +197,24 @@ public interface KryptonProtocol : AutoCloseable {
      * the server can verify later proofs without seeing the profile key.
      */
     public fun profileKeyCommitment(profileKey: ByteArray, aciUuid: String): CryptoResult<ByteArray>
+
+    // ── zkgroup group cipher ────────────────────────────────────────────────
+
+    /** Encrypt a member's [serviceId] (ACI/PNI string) under [groupSecretParams]. */
+    public fun groupEncryptServiceId(groupSecretParams: ByteArray, serviceId: String): CryptoResult<ByteArray>
+
+    /** Decrypt a `UuidCiphertext` back to its ACI/PNI service-id string. */
+    public fun groupDecryptServiceId(groupSecretParams: ByteArray, uuidCiphertext: ByteArray): CryptoResult<String>
+
+    /** Encrypt a member's [profileKey] for [aciUuid] under [groupSecretParams]. */
+    public fun groupEncryptProfileKey(groupSecretParams: ByteArray, profileKey: ByteArray, aciUuid: String): CryptoResult<ByteArray>
+
+    /** Decrypt a `ProfileKeyCiphertext` for [aciUuid] back to the raw profile key. */
+    public fun groupDecryptProfileKey(groupSecretParams: ByteArray, profileKeyCiphertext: ByteArray, aciUuid: String): CryptoResult<ByteArray>
+
+    /** Encrypt an arbitrary [plaintext] blob (e.g. group title) under [groupSecretParams]. */
+    public fun groupEncryptBlob(groupSecretParams: ByteArray, plaintext: ByteArray): CryptoResult<ByteArray>
+
+    /** Decrypt a blob produced by [groupEncryptBlob]. */
+    public fun groupDecryptBlob(groupSecretParams: ByteArray, blob: ByteArray): CryptoResult<ByteArray>
 }

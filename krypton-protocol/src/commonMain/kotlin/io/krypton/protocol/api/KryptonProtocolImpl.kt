@@ -188,6 +188,24 @@ public class KryptonProtocolImpl internal constructor(
     override fun profileKeyCommitment(profileKey: ByteArray, aciUuid: String): CryptoResult<ByteArray> =
         bridge.profileKeyCommitment(profileKey, aciUuid)
 
+    override fun groupEncryptServiceId(groupSecretParams: ByteArray, serviceId: String): CryptoResult<ByteArray> =
+        bridge.groupEncryptServiceId(groupSecretParams, serviceId)
+
+    override fun groupDecryptServiceId(groupSecretParams: ByteArray, uuidCiphertext: ByteArray): CryptoResult<String> =
+        bridge.groupDecryptServiceId(groupSecretParams, uuidCiphertext)
+
+    override fun groupEncryptProfileKey(groupSecretParams: ByteArray, profileKey: ByteArray, aciUuid: String): CryptoResult<ByteArray> =
+        bridge.groupEncryptProfileKey(groupSecretParams, profileKey, aciUuid)
+
+    override fun groupDecryptProfileKey(groupSecretParams: ByteArray, profileKeyCiphertext: ByteArray, aciUuid: String): CryptoResult<ByteArray> =
+        bridge.groupDecryptProfileKey(groupSecretParams, profileKeyCiphertext, aciUuid)
+
+    override fun groupEncryptBlob(groupSecretParams: ByteArray, plaintext: ByteArray): CryptoResult<ByteArray> =
+        bridge.groupEncryptBlob(groupSecretParams, plaintext)
+
+    override fun groupDecryptBlob(groupSecretParams: ByteArray, blob: ByteArray): CryptoResult<ByteArray> =
+        bridge.groupDecryptBlob(groupSecretParams, blob)
+
     override fun close() {
         // Release any native resources if needed
     }
