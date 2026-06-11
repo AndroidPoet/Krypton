@@ -3,6 +3,7 @@ package io.krypton.protocol.api
 import io.krypton.core.result.CryptoResult
 import io.krypton.core.types.*
 import io.krypton.protocol.models.CiphertextMessage
+import io.krypton.protocol.models.GroupSecretParamsResult
 import io.krypton.protocol.models.PreKeyBundle
 import io.krypton.protocol.models.SafetyNumber
 import io.krypton.protocol.models.SealedSenderMessage
@@ -170,4 +171,30 @@ public interface KryptonProtocol : AutoCloseable {
         sealedMessage: ByteArray,
         timestampMillis: Long,
     ): CryptoResult<SealedSenderMessage>
+
+    // ── zkgroup (client-side primitives) ───────────────────────────────────
+
+    /**
+     * Derive a group's deterministic secret/public params and stable identifier
+     * from its 32-byte [masterKey]. Pure client-side zkgroup — no server.
+     */
+    public fun deriveGroupSecretParams(masterKey: ByteArray): CryptoResult<GroupSecretParamsResult>
+
+    /**
+     * Derive the 16-byte access key from a 32-byte [profileKey] — lets you send
+     * sealed-sender messages to non-contacts who shared their profile key.
+     */
+    public fun deriveProfileKeyAccessKey(profileKey: ByteArray): CryptoResult<ByteArray>
+
+    /**
+     * Compute the profile-key version string for [aciUuid] — the opaque handle
+     * the server uses to serve a profile without learning the profile key.
+     */
+    public fun profileKeyVersion(profileKey: ByteArray, aciUuid: String): CryptoResult<String>
+
+    /**
+     * Compute the profile-key commitment for [aciUuid], uploaded with a profile so
+     * the server can verify later proofs without seeing the profile key.
+     */
+    public fun profileKeyCommitment(profileKey: ByteArray, aciUuid: String): CryptoResult<ByteArray>
 }

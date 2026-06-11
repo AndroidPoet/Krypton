@@ -262,6 +262,52 @@ public class RealBridge(
             )
         }
 
+    // ── zkgroup (client-side primitives, real libsignal) ───────────────────
+
+    override fun deriveGroupSecretParams(
+        masterKey: ByteArray,
+    ): CryptoResult<io.krypton.protocol.models.GroupSecretParamsResult> =
+        CryptoResult.catching {
+            val secret = org.signal.libsignal.zkgroup.groups.GroupSecretParams.deriveFromMasterKey(
+                org.signal.libsignal.zkgroup.groups.GroupMasterKey(masterKey),
+            )
+            val public = secret.publicParams
+            io.krypton.protocol.models.GroupSecretParamsResult(
+                secretParams = secret.serialize(),
+                publicParams = public.serialize(),
+                groupIdentifier = public.groupIdentifier.serialize(),
+            )
+        }
+
+    override fun deriveProfileKeyAccessKey(
+        profileKey: ByteArray,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.catching {
+            org.signal.libsignal.zkgroup.profiles.ProfileKey(profileKey).deriveAccessKey()
+        }
+
+    override fun profileKeyVersion(
+        profileKey: ByteArray,
+        aciUuid: String,
+    ): CryptoResult<String> =
+        CryptoResult.catching {
+            val aci = org.signal.libsignal.protocol.ServiceId.Aci(UUID.fromString(aciUuid))
+            org.signal.libsignal.zkgroup.profiles.ProfileKey(profileKey)
+                .getProfileKeyVersion(aci)
+                .serialize()
+        }
+
+    override fun profileKeyCommitment(
+        profileKey: ByteArray,
+        aciUuid: String,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.catching {
+            val aci = org.signal.libsignal.protocol.ServiceId.Aci(UUID.fromString(aciUuid))
+            org.signal.libsignal.zkgroup.profiles.ProfileKey(profileKey)
+                .getCommitment(aci)
+                .serialize()
+        }
+
     private companion object {
         // Fingerprint format version (Signal uses 0).
         const val FINGERPRINT_VERSION: Int = 0

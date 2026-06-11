@@ -129,6 +129,56 @@ public abstract class Bridge(
         CryptoResult.Failure(
             io.krypton.core.result.CryptoError.internal("Sealed sender is not implemented on this platform yet."),
         )
+
+    // ── zkgroup (client-side primitives) ───────────────────────────────────
+
+    /**
+     * Derive a group's deterministic secret/public params and stable identifier
+     * from its 32-byte master key. Pure client-side zkgroup — no server, no
+     * randomness. [RealBridge] (JVM/Android) overrides with libsignal's
+     * `GroupSecretParams.deriveFromMasterKey`.
+     */
+    public open fun deriveGroupSecretParams(
+        masterKey: ByteArray,
+    ): CryptoResult<io.krypton.protocol.models.GroupSecretParamsResult> =
+        CryptoResult.Failure(
+            io.krypton.core.result.CryptoError.internal("zkgroup is not implemented on this platform yet."),
+        )
+
+    /**
+     * Derive the 16-byte access key from a 32-byte profile key — used to send
+     * sealed-sender messages to people who aren't your contacts.
+     */
+    public open fun deriveProfileKeyAccessKey(
+        profileKey: ByteArray,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.Failure(
+            io.krypton.core.result.CryptoError.internal("zkgroup is not implemented on this platform yet."),
+        )
+
+    /**
+     * Compute the profile-key version string for [aciUuid] — the opaque handle
+     * the server uses to serve a profile without learning the profile key.
+     */
+    public open fun profileKeyVersion(
+        profileKey: ByteArray,
+        aciUuid: String,
+    ): CryptoResult<String> =
+        CryptoResult.Failure(
+            io.krypton.core.result.CryptoError.internal("zkgroup is not implemented on this platform yet."),
+        )
+
+    /**
+     * Compute the profile-key commitment for [aciUuid] — uploaded with a profile
+     * so the server can verify later proofs without seeing the profile key.
+     */
+    public open fun profileKeyCommitment(
+        profileKey: ByteArray,
+        aciUuid: String,
+    ): CryptoResult<ByteArray> =
+        CryptoResult.Failure(
+            io.krypton.core.result.CryptoError.internal("zkgroup is not implemented on this platform yet."),
+        )
 }
 
 /**

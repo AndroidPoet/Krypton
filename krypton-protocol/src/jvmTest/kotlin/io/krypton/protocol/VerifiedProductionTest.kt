@@ -301,6 +301,68 @@ class VerifiedProductionTest {
         assertEquals(1, opened.senderDeviceId)
         assertContentEquals(plaintext, opened.message, "Recovered plaintext should match")
     }
+
+    @Test
+    fun `zkgroup derives deterministic group params and matches libsignal`() = runBlocking {
+        val protocol = KryptonConfigurator().build()
+
+        // 32-byte group master key (in real use, randomly generated once per group).
+        val masterKey = ByteArray(32) { (it + 1).toByte() }
+
+        val r1 = protocol.deriveGroupSecretParams(masterKey)
+        assertTrue(r1.isSuccess, "deriveGroupSecretParams should succeed: ${r1.errorOrNull()}")
+        val params = r1.getOrNull()!!
+
+        // Deterministic: the same master key always yields the same params/identifier.
+        val r2 = protocol.deriveGroupSecretParams(masterKey).getOrNull()!!
+        assertContentEquals(params.secretParams, r2.secretParams, "Secret params must be deterministic")
+        assertContentEquals(params.groupIdentifier, r2.groupIdentifier, "Group identifier must be deterministic")
+
+        // Cross-check against libsignal directly — Krypton must match it byte-for-byte.
+        val expected = org.signal.libsignal.zkgroup.groups.GroupSecretParams.deriveFromMasterKey(
+            org.signal.libsignal.zkgroup.groups.GroupMasterKey(masterKey),
+        )
+        assertContentEquals(expected.serialize(), params.secretParams, "Secret params must match libsignal")
+        assertContentEquals(
+            expected.publicParams.groupIdentifier.serialize(),
+            params.groupIdentifier,
+            "Group identifier must match libsignal",
+        )
+        assertTrue(params.groupIdentifier.size == 32, "Group identifier is 32 bytes")
+    }
+
+    @Test
+    fun `zkgroup derives profile access key and version matching libsignal`() = runBlocking {
+        val protocol = KryptonConfigurator().build()
+        val profileKey = ByteArray(32) { (it * 3 + 7).toByte() }
+        val aciUuid = "84fd7196-b3fa-4d4d-bbf8-8f1cd1d75f3a"
+
+        // Access key — used to sealed-send to non-contacts who shared their profile key.
+        val accessResult = protocol.deriveProfileKeyAccessKey(profileKey)
+        assertTrue(accessResult.isSuccess, "deriveProfileKeyAccessKey should succeed: ${accessResult.errorOrNull()}")
+        val access = accessResult.getOrNull()!!
+
+        val expectedAccess = org.signal.libsignal.zkgroup.profiles.ProfileKey(profileKey).deriveAccessKey()
+        assertContentEquals(expectedAccess, access, "Access key must match libsignal")
+        assertTrue(access.size == 16, "Access key is 16 bytes")
+
+        // Profile-key version string.
+        val versionResult = protocol.profileKeyVersion(profileKey, aciUuid)
+        assertTrue(versionResult.isSuccess, "profileKeyVersion should succeed: ${versionResult.errorOrNull()}")
+        val aci = org.signal.libsignal.protocol.ServiceId.Aci(java.util.UUID.fromString(aciUuid))
+        val expectedVersion = org.signal.libsignal.zkgroup.profiles.ProfileKey(profileKey)
+            .getProfileKeyVersion(aci)
+            .serialize()
+        assertEquals(expectedVersion, versionResult.getOrNull()!!, "Profile key version must match libsignal")
+
+        // Commitment.
+        val commitmentResult = protocol.profileKeyCommitment(profileKey, aciUuid)
+        assertTrue(commitmentResult.isSuccess, "profileKeyCommitment should succeed: ${commitmentResult.errorOrNull()}")
+        val expectedCommitment = org.signal.libsignal.zkgroup.profiles.ProfileKey(profileKey)
+            .getCommitment(aci)
+            .serialize()
+        assertContentEquals(expectedCommitment, commitmentResult.getOrNull()!!, "Commitment must match libsignal")
+    }
 }
 
 /**

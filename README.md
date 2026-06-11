@@ -67,10 +67,11 @@ Krypton aims to mirror Signal's libraries so you can follow libsignal's docs. Cu
 | Protocol (X3DH, Double Ratchet, sessions, pre-keys) | `krypton-protocol` | ✅ Implemented (JVM/Android/Apple) |
 | Fingerprints / safety numbers | `KryptonProtocol.safetyNumber(...)` | ✅ Implemented (JVM/Android) |
 | Sealed sender | `KryptonProtocol.sealedSender*` / `SealedSender` | ✅ Implemented (JVM/Android) |
-| ZK group credentials | `krypton-zkgroup` | 🚧 Stub |
+| zkgroup — group params, profile access key / version / commitment | `krypton-zkgroup` / `KryptonProtocol` | ✅ Implemented (JVM/Android) |
+| zkgroup — server-issued credentials & membership proofs | — | ⛔ Not provided (needs a credential server) |
 | Standalone Double Ratchet | `krypton-double-ratchet` | ⛔ Fails loud — use `KryptonProtocol` (ratchet runs inside libsignal) |
 
-> Safety numbers and sealed sender are backed by real libsignal (`NumericFingerprintGenerator`, `SealedSessionCipher`) and verified by real-crypto tests (safety numbers match on both sides; sealed sender round-trips through a server-issued certificate). On platforms where the native bridge hasn't wired a feature yet, it **fails loud** rather than faking. `zkgroup` remains a 🚧 stub — do not rely on it. The standalone `double-ratchet` now **fails loud** instead of returning fake key material.
+> Safety numbers, sealed sender, and the client-side zkgroup primitives are backed by real libsignal (`NumericFingerprintGenerator`, `SealedSessionCipher`, `GroupSecretParams`/`ProfileKey`) and verified by real-crypto tests — including byte-for-byte cross-checks against libsignal for the zkgroup derivations. On platforms where the native bridge hasn't wired a feature yet, it **fails loud** rather than faking. The full zkgroup **credential dance** (auth/profile-key credentials, membership presentations) needs a credential-issuing server and is intentionally **not stubbed** — it's absent, not fake. The standalone `double-ratchet` also **fails loud** instead of returning fake key material.
 
 ## Architecture
 
@@ -105,7 +106,9 @@ Not yet published. To make the one-line install real, Krypton needs: CI that bui
 | `krypton-core` | Result types, key types, encoding |
 | `krypton-storage` | Store interfaces + in-memory (platform stores are scaffolds) |
 | `krypton-protocol` | Signal Protocol (X3DH, sessions, encrypt/decrypt) + the platform bridges |
-| `krypton-sealed-sender` / `krypton-zkgroup` / `krypton-double-ratchet` | 🚧 stubs, not production-ready |
+| `krypton-sealed-sender` | Sealed-sender convenience wrapper (real on JVM/Android) |
+| `krypton-zkgroup` | Client-side zkgroup primitives — group params, profile access key/version/commitment (real on JVM/Android) |
+| `krypton-double-ratchet` | ⛔ fails loud — the ratchet runs inside `KryptonProtocol`/libsignal |
 
 ## License
 

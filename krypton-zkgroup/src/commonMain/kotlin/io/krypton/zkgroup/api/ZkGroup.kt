@@ -1,52 +1,55 @@
 package io.krypton.zkgroup.api
 
 import io.krypton.core.result.CryptoResult
-import io.krypton.core.types.PublicKey
+import io.krypton.protocol.api.KryptonProtocol
+import io.krypton.protocol.models.GroupSecretParamsResult
 
 /**
- * Zero-knowledge group operations (based on libsignal's zkgroup).
+ * Zero-knowledge group operations (libsignal's zkgroup), exposed as a thin
+ * wrapper over [KryptonProtocol].
  *
- * Enables private group membership verification without revealing
- * who is in the group.
+ * ## What's implemented (client-side, deterministic — no server, real libsignal)
+ * - **Group params**: derive a group's secret/public params and its stable
+ *   identifier from the 32-byte group master key.
+ * - **Profile access key**: derive the access key from a profile key (used to
+ *   sealed-send to people who aren't your contacts).
+ * - **Profile key version / commitment**: the opaque handles the server uses to
+ *   serve and verify a profile without ever seeing the profile key.
  *
- * ## Capabilities
- * - **Profile credential**: Prove you have a valid profile without revealing it.
- * - **Group credential**: Prove you're a group member without revealing your identity.
- * - **Auth credential**: Prove you're authenticated without a session token.
+ * These are real on JVM/Android and **fail loud** on platforms where the bridge
+ * hasn't wired zkgroup yet — they never return a fake/placeholder result.
+ *
+ * ## What's NOT here yet
+ * The full credential dance (auth credentials, profile-key credentials, group
+ * membership **proofs/presentations**) requires server-issued credentials and a
+ * server params exchange. Those are intentionally absent rather than stubbed —
+ * call into libsignal directly if you need them, or open an issue.
  */
-public class ZkGroup {
+public class ZkGroup(
+    private val protocol: KryptonProtocol,
+) {
+    /**
+     * Derive a group's deterministic secret/public params and stable identifier
+     * from its 32-byte [masterKey].
+     */
+    public fun deriveGroupSecretParams(masterKey: ByteArray): CryptoResult<GroupSecretParamsResult> =
+        protocol.deriveGroupSecretParams(masterKey)
 
     /**
-     * Verifies that a user's [profileKey] corresponds to a valid profile
-     * without revealing the profile contents.
-     *
-     * @return `true` if the zero-knowledge proof is valid.
+     * Derive the 16-byte access key from a 32-byte [profileKey].
      */
-    public fun verifyProfileMembership(
-        profileKey: PublicKey,
-        proof: ByteArray,
-        serverParams: ByteArray,
-    ): CryptoResult<Boolean> =
-        // In production: verify zero-knowledge proof
-        CryptoResult.Success(false)
+    public fun deriveProfileKeyAccessKey(profileKey: ByteArray): CryptoResult<ByteArray> =
+        protocol.deriveProfileKeyAccessKey(profileKey)
 
     /**
-     * Verifies that a user is a member of a group without revealing
-     * their identity key to the server.
+     * Compute the profile-key version string for the account [aciUuid].
      */
-    public fun verifyGroupMembership(
-        identityKey: PublicKey,
-        proof: ByteArray,
-        groupSecretParams: ByteArray,
-    ): CryptoResult<Boolean> =
-        CryptoResult.Success(false)
+    public fun profileKeyVersion(profileKey: ByteArray, aciUuid: String): CryptoResult<String> =
+        protocol.profileKeyVersion(profileKey, aciUuid)
 
     /**
-     * Creates a zero-knowledge proof of group membership.
+     * Compute the profile-key commitment for the account [aciUuid].
      */
-    public fun createGroupMembershipProof(
-        identityKey: PublicKey,
-        groupSecretParams: ByteArray,
-    ): CryptoResult<ByteArray> =
-        CryptoResult.Success(ByteArray(0))
+    public fun profileKeyCommitment(profileKey: ByteArray, aciUuid: String): CryptoResult<ByteArray> =
+        protocol.profileKeyCommitment(profileKey, aciUuid)
 }

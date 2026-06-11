@@ -174,6 +174,20 @@ public class KryptonProtocolImpl internal constructor(
     ): CryptoResult<io.krypton.protocol.models.SealedSenderMessage> =
         bridge.sealedSenderDecrypt(localUuid, localDeviceId, trustRoot, sealedMessage, timestampMillis)
 
+    override fun deriveGroupSecretParams(
+        masterKey: ByteArray,
+    ): CryptoResult<io.krypton.protocol.models.GroupSecretParamsResult> =
+        bridge.deriveGroupSecretParams(masterKey)
+
+    override fun deriveProfileKeyAccessKey(profileKey: ByteArray): CryptoResult<ByteArray> =
+        bridge.deriveProfileKeyAccessKey(profileKey)
+
+    override fun profileKeyVersion(profileKey: ByteArray, aciUuid: String): CryptoResult<String> =
+        bridge.profileKeyVersion(profileKey, aciUuid)
+
+    override fun profileKeyCommitment(profileKey: ByteArray, aciUuid: String): CryptoResult<ByteArray> =
+        bridge.profileKeyCommitment(profileKey, aciUuid)
+
     override fun close() {
         // Release any native resources if needed
     }

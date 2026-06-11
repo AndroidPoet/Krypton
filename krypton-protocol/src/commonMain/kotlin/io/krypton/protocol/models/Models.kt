@@ -159,3 +159,35 @@ public data class SealedSenderMessage(
     override fun toString(): String =
         "SealedSenderMessage(sender=$senderUuid.$senderDeviceId, size=${message.size})"
 }
+
+/**
+ * Client-side zkgroup parameters derived from a group's master key.
+ *
+ * All three are deterministic functions of the master key (no server, no
+ * randomness): [secretParams] is the full secret material a member holds,
+ * [publicParams] is what's shared with the server, and [groupIdentifier] is the
+ * stable, opaque group ID the server uses without learning the group's contents.
+ */
+public data class GroupSecretParamsResult(
+    val secretParams: ByteArray,
+    val publicParams: ByteArray,
+    val groupIdentifier: ByteArray,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is GroupSecretParamsResult) return false
+        return secretParams.contentEquals(other.secretParams) &&
+            publicParams.contentEquals(other.publicParams) &&
+            groupIdentifier.contentEquals(other.groupIdentifier)
+    }
+
+    override fun hashCode(): Int {
+        var r = secretParams.contentHashCode()
+        r = 31 * r + publicParams.contentHashCode()
+        r = 31 * r + groupIdentifier.contentHashCode()
+        return r
+    }
+
+    override fun toString(): String =
+        "GroupSecretParamsResult(groupIdentifier=${groupIdentifier.size}B)"
+}
