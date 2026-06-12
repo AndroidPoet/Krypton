@@ -27,18 +27,22 @@ public suspend fun KryptonProtocol.decryptString(
     decrypt(sender, message).map { it.decodeToString() }
 
 /**
- * Encrypts [plaintext] and returns the serialized message as a Base64 string,
- * ready to send over the wire.
+ * Encrypts [plaintext] and returns a Base64 string ready to send over the wire.
+ *
+ * The message **type** is prepended as a one-byte tag so the receiver can decrypt
+ * deterministically. libsignal's serialized bytes are version-prefixed and do
+ * **not** self-identify as PreKey vs. regular, so a self-describing wire is the
+ * only robust scheme — never guess the type from libsignal's payload.
  */
 public suspend fun KryptonProtocol.encryptToBase64(
     recipient: ProtocolAddress,
     plaintext: ByteArray,
 ): CryptoResult<String> =
-    encrypt(recipient, plaintext).map { Base64.encode(it.serialized) }
+    encrypt(recipient, plaintext).map { Base64.encode(byteArrayOf(it.type.wireTag) + it.serialized) }
 
 /**
- * Decrypts a Base64-encoded [ciphertext] received from [sender].
- * Infers the message type from the first byte of the decoded data.
+ * Decrypts a Base64-encoded [ciphertext] (produced by [encryptToBase64] or the
+ * simple [encrypt]) received from [sender], reading the one-byte type tag.
  */
 public suspend fun KryptonProtocol.decryptFromBase64(
     sender: ProtocolAddress,
@@ -46,26 +50,33 @@ public suspend fun KryptonProtocol.decryptFromBase64(
 ): CryptoResult<ByteArray> =
     CryptoResult.catching { Base64.decode(ciphertext) }
         .flatMap { raw ->
-            val type = inferMessageType(raw)
-            decrypt(sender, CiphertextMessage(type, raw))
+            decodeWire(raw).flatMap { (type, payload) ->
+                decrypt(sender, CiphertextMessage(type, payload))
+            }
         }
 
-/**
- * Infers the [CiphertextMessageType] from the first byte of serialized data.
- *
- * Signal Protocol convention:
- *   1 (0x01) → PRE_KEY (PreKeySignalMessage)
- *   2 (0x02) → MESSAGE (SignalMessage)
- *   3 (0x03) → SENDER_KEY (SenderKeyMessage)
- *   else     → PLAINTEXT (fallback)
- */
-private fun inferMessageType(data: ByteArray): CiphertextMessageType =
-    when (data.firstOrNull()?.toInt()?.and(0xFF)) {
+/** One-byte wire tag for each message type (self-describing wire format). */
+private val CiphertextMessageType.wireTag: Byte
+    get() = when (this) {
+        CiphertextMessageType.PRE_KEY -> 1
+        CiphertextMessageType.MESSAGE -> 2
+        CiphertextMessageType.SENDER_KEY -> 3
+        CiphertextMessageType.PLAINTEXT -> 4
+    }
+
+/** Split a tagged wire payload back into its [CiphertextMessageType] + raw bytes. */
+private fun decodeWire(raw: ByteArray): CryptoResult<Pair<CiphertextMessageType, ByteArray>> {
+    val type = when (raw.firstOrNull()?.toInt()) {
         1 -> CiphertextMessageType.PRE_KEY
         2 -> CiphertextMessageType.MESSAGE
         3 -> CiphertextMessageType.SENDER_KEY
-        else -> CiphertextMessageType.PLAINTEXT
+        4 -> CiphertextMessageType.PLAINTEXT
+        else -> return CryptoResult.Failure(
+            io.krypton.core.result.CryptoError.internal("Malformed wire: missing/unknown message-type tag"),
+        )
     }
+    return CryptoResult.Success(type to raw.copyOfRange(1, raw.size))
+}
 
 /**
  * Processes a [PreKeyBundle] and then immediately encrypts a message,
@@ -100,8 +111,7 @@ public suspend fun KryptonProtocol.encrypt(
     text: String,
     deviceId: Int = DeviceId.PRIMARY.value,
 ): CryptoResult<String> =
-    encrypt(ProtocolAddress(name, DeviceId(deviceId)), text.encodeToByteArray())
-        .map { Base64.encode(it.serialized) }
+    encryptToBase64(ProtocolAddress(name, DeviceId(deviceId)), text.encodeToByteArray())
 
 /**
  * Decrypt a wire-ready Base64 string [wire] from the sender named [name]
@@ -117,10 +127,7 @@ public suspend fun KryptonProtocol.decrypt(
     wire: String,
     deviceId: Int = DeviceId.PRIMARY.value,
 ): CryptoResult<String> =
-    CryptoResult.catching { Base64.decode(wire) }
-        .flatMap { raw ->
-            decrypt(ProtocolAddress(name, DeviceId(deviceId)), CiphertextMessage(inferMessageType(raw), raw))
-        }
+    decryptFromBase64(ProtocolAddress(name, DeviceId(deviceId)), wire)
         .map { it.decodeToString() }
 
 /**

@@ -124,6 +124,10 @@ SignalFfiError *signal_signed_pre_key_record_destroy(SignalMutPointerSignedPreKe
 // ── Kyber ─────────────────────────────────────────────────────────────
 SignalFfiError *signal_kyber_key_pair_generate(SignalMutPointerKyberKeyPair *out);
 SignalFfiError *signal_kyber_key_pair_destroy(SignalMutPointerKyberKeyPair p);
+SignalFfiError *signal_kyber_key_pair_get_public_key(SignalMutPointerKyberPublicKey *out, SignalConstPointerKyberKeyPair key_pair);
+SignalFfiError *signal_kyber_public_key_deserialize(SignalMutPointerKyberPublicKey *out, SignalBorrowedBuffer data);
+SignalFfiError *signal_kyber_public_key_serialize(SignalOwnedBuffer *out, SignalConstPointerKyberPublicKey obj);
+SignalFfiError *signal_kyber_public_key_destroy(SignalMutPointerKyberPublicKey p);
 SignalFfiError *signal_kyber_pre_key_record_new(SignalMutPointerKyberPreKeyRecord *out, uint32_t id, uint64_t timestamp, SignalConstPointerKyberKeyPair key_pair, SignalBorrowedBuffer signature);
 SignalFfiError *signal_kyber_pre_key_record_destroy(SignalMutPointerKyberPreKeyRecord p);
 

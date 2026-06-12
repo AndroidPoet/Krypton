@@ -45,7 +45,9 @@ public class NativeBridge(
     /** Check null error ptr; throw if non-null. */
     private fun checkErr(errPtr: Any?) {
         if (errPtr == null) return
-        error("libsignal_ffi operation failed")
+        @Suppress("UNCHECKED_CAST")
+        val code = (errPtr as? CPointer<cnames.structs.SignalFfiError>)?.let { signal_error_get_type(it) } ?: 0u
+        error("libsignal_ffi operation failed (error type $code)")
     }
 
     /** Build a CValue<SignalBorrowedBuffer> from this ByteArray. */
@@ -103,6 +105,20 @@ public class NativeBridge(
     /** Convert alloc'd SignalMutPointerPrivateKey → CValue<SignalConstPointerPrivateKey>. */
     private fun MemScope.constPriv(mut: SignalMutPointerPrivateKey): CValue<SignalConstPointerPrivateKey> {
         val const = alloc<SignalConstPointerPrivateKey>()
+        const.raw = mut.raw
+        return const.readValue()
+    }
+
+    /** Convert alloc'd SignalMutPointerKyberPublicKey → CValue<SignalConstPointerKyberPublicKey>. */
+    private fun MemScope.constKyberPub(mut: SignalMutPointerKyberPublicKey): CValue<SignalConstPointerKyberPublicKey> {
+        val const = alloc<SignalConstPointerKyberPublicKey>()
+        const.raw = mut.raw
+        return const.readValue()
+    }
+
+    /** Convert alloc'd SignalMutPointerKyberKeyPair → CValue<SignalConstPointerKyberKeyPair>. */
+    private fun MemScope.constKyberPair(mut: SignalMutPointerKyberKeyPair): CValue<SignalConstPointerKyberKeyPair> {
+        val const = alloc<SignalConstPointerKyberKeyPair>()
         const.raw = mut.raw
         return const.readValue()
     }
@@ -234,8 +250,9 @@ public class NativeBridge(
                 val idPub = alloc<SignalMutPointerPublicKey>()
                 checkErr(signal_publickey_deserialize(idPub.ptr, bundle.identityKey.publicKey.bytes.asBorrowedBuffer(this)))
 
-                // Zeroed kyber public key (placeholder — alloc zeroes)
-                val kyberNullPub = alloc<SignalConstPointerKyberPublicKey>().readValue()
+                // Deserialize the REAL Kyber pre-key public key from the bundle.
+                val kyberPub = alloc<SignalMutPointerKyberPublicKey>()
+                checkErr(signal_kyber_public_key_deserialize(kyberPub.ptr, bundle.kyberPreKeyPublic.asBorrowedBuffer(this)))
 
                 checkErr(signal_pre_key_bundle_new(
                     bundleOut.ptr,
@@ -248,8 +265,8 @@ public class NativeBridge(
                     bundle.signedPreKeySignature.asBorrowedBuffer(this),
                     constPub(idPub),
                     bundle.kyberPreKeyId.toUInt(),
-                    kyberNullPub,
-                    ByteArray(0).asBorrowedBuffer(this),
+                    constKyberPub(kyberPub),
+                    bundle.kyberPreKeySignature.asBorrowedBuffer(this),
                 ))
 
                 val bundleConst = alloc<SignalConstPointerPreKeyBundle>()
@@ -401,17 +418,25 @@ public class NativeBridge(
                 val kyberPair = alloc<SignalMutPointerKyberKeyPair>()
                 checkErr(signal_kyber_key_pair_generate(kyberPair.ptr))
 
+                // Serialize the REAL Kyber public key (~1568 bytes), not a placeholder.
+                val kyberPub = alloc<SignalMutPointerKyberPublicKey>()
+                checkErr(signal_kyber_key_pair_get_public_key(kyberPub.ptr, constKyberPair(kyberPair)))
+                val kyberPubB = alloc<SignalOwnedBuffer>()
+                checkErr(signal_kyber_public_key_serialize(kyberPubB.ptr, constKyberPub(kyberPub)))
+                val kyberPubBytes = readOwnedBuf(kyberPubB.ptr)
+                checkErr(signal_kyber_public_key_destroy(kyberPub.readValue()))
+
+                // Sign the real Kyber public key with the identity key.
                 val idPriv = alloc<SignalMutPointerPrivateKey>()
                 checkErr(signal_privatekey_deserialize(idPriv.ptr, identityKeyPair.privateKey.bytes.asBorrowedBuffer(this)))
-
-                val kyberPubBytes = ByteArray(32) // placeholder
                 val sig = alloc<SignalOwnedBuffer>()
                 checkErr(signal_privatekey_sign(sig.ptr, constPriv(idPriv), kyberPubBytes.asBorrowedBuffer(this)))
                 val sigArr = readOwnedBuf(sig.ptr)
-
                 checkErr(signal_privatekey_destroy(idPriv.readValue()))
 
-                delegateRef.get().storeKyberKeyPair(keyId, kyberPair.raw!!)
+                // Store the key pair AND its signature so the record can be
+                // reconstructed faithfully when libsignal asks the store to load it.
+                delegateRef.get().storeKyberKeyPair(keyId, kyberPair.raw!!, sigArr)
                 KyberPreKeyResult(keyId, kyberPubBytes, sigArr)
             }
         }
@@ -491,8 +516,13 @@ internal class StoreDelegate(
     // the concrete SignalKyberKeyPair type is not directly importable in Kotlin 2.x cinterop.
     private val kyberKeyPairs = mutableMapOf<Int, CPointer<out CPointed>?>()
 
-    fun storeKyberKeyPair(id: Int, pair: CPointer<out CPointed>?) {
+    // The identity signature over each kyber public key, kept so the loaded
+    // record carries the real signature (not a zeroed placeholder).
+    private val kyberSignatures = mutableMapOf<Int, ByteArray>()
+
+    fun storeKyberKeyPair(id: Int, pair: CPointer<out CPointed>?, signature: ByteArray) {
         kyberKeyPairs[id] = pair
+        kyberSignatures[id] = signature
     }
 
     // ── Helpers ─────────────────────────────────────────────────────
@@ -699,8 +729,10 @@ internal class StoreDelegate(
         }
         val rec = alloc<SignalMutPointerKyberPreKeyRecord>()
         val now = (NSDate().timeIntervalSince1970 * 1000.0).toULong()
-        // Use krypton_adapter: takes raw void* pointer for kyber key pair
-        if (krypton_kyber_pre_key_record_new_from_raw(rec.ptr, id, now, pair, ByteArray(32).toBorrowed(this)) != null) return@memScoped 1
+        // Use krypton_adapter: takes raw void* pointer for kyber key pair.
+        // Pass the REAL identity signature stored at generation time.
+        val signature = kyberSignatures[id.toInt()] ?: ByteArray(0)
+        if (krypton_kyber_pre_key_record_new_from_raw(rec.ptr, id, now, pair, signature.toBorrowed(this)) != null) return@memScoped 1
         out.pointed.raw = rec.raw
         0
     }
@@ -709,6 +741,7 @@ internal class StoreDelegate(
 
     fun cMarkKyberPreKeyUsed(id: UInt, ecPrekeyId: UInt, baseKey: CValue<SignalMutPointerPublicKey>): Int {
         kyberKeyPairs.remove(id.toInt())
+        kyberSignatures.remove(id.toInt())
         return 0
     }
 }

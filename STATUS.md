@@ -49,13 +49,18 @@ placeholder.
 
 | Target | Crypto | How libsignal is delivered |
 |---|---|---|
-| JVM (desktop) | ✅ Real | Signal's Maven jars (bundled natives) |
-| Android | ✅ Real | `libsignal-android` |
-| iOS / macOS (+ tvOS) | ✅ Real | cinterop → `libsignal_ffi` |
+| JVM (desktop) | ✅ Real, verified | Signal's Maven jars (bundled natives) |
+| Android | ✅ Real | `libsignal-android` (same bridge as JVM) |
+| iOS / macOS (+ tvOS) | 🟡 Partial | cinterop → `libsignal_ffi`; **send path verified, decrypt WIP** (see below) |
 | Linux / Windows (native) | ⚠️ Fail-loud | no libsignal binary; use JVM for desktop |
 | wasmJs | ⚠️ Fail-loud | libsignal has no wasm build |
 
-All targets **compile**; real E2EE runs on JVM, Android, iOS, macOS.
+Full, test-verified E2EE runs on **JVM and Android**. On **Apple**, real
+libsignal_ffi is wired and the send path is proven by a real-FFI test
+(`NativeRealCryptoTest`): genuine ~1568-byte Kyber pre-key, X3DH handshake, and
+encrypt all succeed. The PreKey **decrypt** path still returns libsignal error 30
+(`InvalidMessage`) and is tracked as an `@Ignore`d test — **don't ship Apple E2EE
+until that's green.**
 
 ---
 
@@ -80,9 +85,11 @@ All targets **compile**; real E2EE runs on JVM, Android, iOS, macOS.
    link into per-target artifacts → publish `io.krypton:krypton` to Maven Central,
    so the one-line install becomes real. (Workflows scaffolded in `.github/workflows/`,
    not yet run — repo is private.)
-2. **Apple native correctness** — `NativeBridge.kt` has a zeroed Kyber-key
-   placeholder and constant identity keys on stub platforms; make these fail loud
-   rather than return constant material.
+2. **Apple native decrypt** — the zeroed-Kyber placeholder is now **fixed** (real
+   Kyber key generated, signed, serialized into the bundle, and accepted by X3DH;
+   verified by `NativeRealCryptoTest`). Remaining: the PreKey **decrypt** path
+   returns `InvalidMessage` (error 30) — the receive-path FFI store wiring needs
+   debugging before Apple E2EE is shippable.
 3. **Group messaging (sender keys)** — `groupEncrypt/groupDecrypt` are not wired yet.
 4. _(Optional)_ zkgroup credential dance — implementable + locally testable if a
    compatible server is ever in scope.

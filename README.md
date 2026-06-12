@@ -54,13 +54,17 @@ This is the most common confusion. **Your users add one Gradle line and nothing 
 
 | Target | Crypto | Notes |
 |---|---|---|
-| **JVM** (desktop) | ✅ Real | libsignal-client (bundled natives) |
+| **JVM** (desktop) | ✅ Real, verified | libsignal-client (bundled natives) |
 | **Android** | ✅ Real | libsignal-android |
-| **iOS / macOS** (+ tvOS) | ✅ Real | cinterop → `libsignal_ffi` |
+| **iOS / macOS** (+ tvOS) | 🟡 Partial | cinterop → `libsignal_ffi`; send path verified, **decrypt WIP** |
 | **Linux / Windows** (native) | ⚠️ Stub | fail-loud; use the **JVM** target for desktop |
 | **wasmJs** | ⚠️ Stub | libsignal has no wasm build — unsupported |
 
-Compiles on all of the above; **real E2EE runs on JVM, Android, iOS, and macOS**.
+Compiles on all of the above. **Full, test-verified E2EE runs on JVM and Android.**
+On Apple, real libsignal_ffi is wired and the send path (real Kyber pre-key +
+X3DH + encrypt) is proven by a real-FFI test, but the PreKey **decrypt** path is
+still WIP (libsignal `InvalidMessage`) — see [STATUS.md](STATUS.md). Don't ship
+Apple E2EE yet.
 
 ## API parity with libsignal
 

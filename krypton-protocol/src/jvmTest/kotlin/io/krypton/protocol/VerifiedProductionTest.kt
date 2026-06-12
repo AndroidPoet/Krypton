@@ -6,6 +6,8 @@ import io.krypton.protocol.api.KryptonConfigurator
 import io.krypton.protocol.api.KryptonProtocol
 import io.krypton.protocol.api.encryptString
 import io.krypton.protocol.api.decryptString
+import io.krypton.protocol.api.encrypt
+import io.krypton.protocol.api.decrypt
 import io.krypton.protocol.api.processBundleAndEncrypt
 import io.krypton.protocol.models.CiphertextMessageType
 import io.krypton.protocol.models.PreKeyBundle
@@ -98,6 +100,25 @@ class VerifiedProductionTest {
         assertTrue(decryptResult.isSuccess, "Alice should decrypt successfully: ${decryptResult.errorOrNull()}")
         val decryptedMessage = decryptResult.getOrNull()!!
         assertEquals(originalMessage, decryptedMessage, "Decrypted message should match original")
+    }
+
+    @Test
+    fun `simple string API self-describing wire round-trips through real libsignal`() = runBlocking {
+        val (alice, _) = createProtocolWithPreKeys()
+        val (bob, _) = createProtocolWithPreKeys()
+        val aliceAddress = ProtocolAddress("alice", DeviceId(1))
+
+        // Bob starts a session with Alice from her bundle.
+        bob.processPreKeyBundle(alice.getPreKeyBundle(aliceAddress).getOrNull()!!).getOrThrow()
+
+        // First message is a PreKey message — the simple API tags the wire with the
+        // message type so decrypt is deterministic (no guessing from libsignal bytes).
+        val wire1 = bob.encrypt("alice", "first (prekey) message").getOrThrow()
+        assertEquals("first (prekey) message", alice.decrypt("bob", wire1).getOrThrow())
+
+        // Second message is a regular MESSAGE — a different tag; still round-trips.
+        val wire2 = alice.encrypt("bob", "second (regular) message").getOrThrow()
+        assertEquals("second (regular) message", bob.decrypt("alice", wire2).getOrThrow())
     }
 
     @Test

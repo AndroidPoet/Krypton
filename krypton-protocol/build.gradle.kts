@@ -74,11 +74,17 @@ kotlin {
             }
         }
 
-        // Connect each Apple target's main source set to appleMain
+        // Apple shared TEST source set — real-FFI tests run on every Apple target.
+        val appleTest by creating {
+            dependsOn(commonTest.get())
+        }
+
+        // Connect each Apple target's main/test source sets to appleMain/appleTest
         listOf("iosX64", "iosArm64", "iosSimulatorArm64",
                "macosX64", "macosArm64",
                "tvosX64", "tvosArm64", "tvosSimulatorArm64").forEach { target ->
             getByName("${target}Main").dependsOn(appleMain)
+            getByName("${target}Test").dependsOn(appleTest)
         }
     }
 
