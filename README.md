@@ -36,6 +36,8 @@ val text = krypton.decrypt("alice", wire).getOrThrow()      // back to "Hello!"
 
 Strings in, Base64 out — no `ProtocolAddress`, `ByteArray`, or message-type bookkeeping. The full typed API (`encrypt(ProtocolAddress, ByteArray)`, pre-key bundles, sessions, groups) is still there when you need it.
 
+> 💬 **Want to build a real end-to-end encrypted chat in your app?** See the step-by-step **[GUIDE.md](GUIDE.md)** — registration, publishing pre-key bundles, the X3DH handshake, messaging, safety numbers, and exactly what your server must (and must not) do.
+
 ## "Do my users ship a 113 MB binary?" — No.
 
 This is the most common confusion. **Your users add one Gradle line and nothing else.** Here's how the native libsignal reaches each platform:
