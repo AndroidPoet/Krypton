@@ -190,6 +190,31 @@ kotlin {
 The fetched `.a` is large (~77 MB) but that's a **build input, not your app** — a Release link keeps
 only the few MB you actually use (~3 MB; see [How big is it?](#how-big-is-it)).
 
+### What `build` mode runs under the hood (cargo)
+
+Both the plugin's `build` mode and the script compile `libsignal_ffi` exactly the way Signal's own
+docs describe — straight from the Rust source, with `cargo`:
+
+```sh
+git clone --branch v0.86.5 https://github.com/signalapp/libsignal
+cd libsignal
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios \
+                  aarch64-apple-darwin x86_64-apple-darwin
+cargo build -p libsignal-ffi --release --target aarch64-apple-ios   # …and one per target
+# → target/<triple>/release/libsignal_ffi.a
+```
+
+You don't run these by hand — the plugin/script do it for you — but that's all that happens.
+**Prerequisite:** a Rust toolchain (`build` mode only). Install once with
+[rustup](https://rustup.rs); the plugin/script add the Apple targets for you. `download` mode needs
+no Rust, but is iOS-only.
+
+> **Why doesn't Krypton just run cargo and ship the result?** It can — that's exactly what `build`
+> mode does on *your* machine. The one thing Krypton refuses to do is publish a pre-built Signal
+> binary in its own artifacts, so no one ever has to trust bytes that came from us instead of from
+> Signal. The crypto is always compiled (or downloaded) from Signal's official source, by you. See
+> [SECURITY.md](SECURITY.md).
+
 ## How big is it?
 
 Krypton's own published artifacts are tiny — the JVM jars are ~0.2 MB and the Apple klibs ~88 KB
@@ -315,6 +340,20 @@ Issues and PRs are welcome. Please make sure the build stays green:
 
 Built on [signalapp/libsignal](https://github.com/signalapp/libsignal) — the real cryptography
 is entirely Signal's work. Krypton only provides the Kotlin Multiplatform bindings.
+
+## Cryptography / export notice
+
+This distribution includes cryptographic software (it links [libsignal](https://github.com/signalapp/libsignal)).
+The country in which you reside may restrict the import, possession, use, and/or re-export of
+encryption software. Before using it, check your country's laws, regulations, and policies. See
+<https://www.wassenaar.org/> for more information.
+
+The U.S. Bureau of Industry and Security (BIS) classifies the underlying cryptographic functionality
+under ECCN **5D002.C.1**. As **publicly available, open-source software**, the form and manner of this
+distribution makes it eligible for export under the License Exception **ENC / TSU** (EAR §740.13).
+Krypton itself ships **no** Signal binary — the cryptographic library is obtained directly from
+Signal's official source; see [SECURITY.md](SECURITY.md). This notice is informational and is not
+legal advice.
 
 ## License
 
