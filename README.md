@@ -103,6 +103,7 @@ bundles, what your server must and must not do — see **[GUIDE.md](GUIDE.md)**.
 | --- | --- | --- |
 | `samples/jvm-demo` | `./gradlew :samples:jvm-demo:run` | Headless encrypt→decrypt round-trip on real libsignal |
 | `samples/composeApp` | `./gradlew :samples:composeApp:run` | **One Compose UI shared across Desktop + iOS** — a live encrypted chat |
+| `samples/ktor-server` | `./gradlew :samples:ktor-server:run` | **Companion backend** — Ktor + `org.signal:libsignal-server`: pre-key bundle exchange, sealed-sender certificates, zkgroup credential issuance ([details](samples/ktor-server/README.md)) |
 
 The iOS app is an Xcode project under `samples/composeApp/iosApp` (generated with
 [XcodeGen](https://github.com/yonaskolb/XcodeGen)):
