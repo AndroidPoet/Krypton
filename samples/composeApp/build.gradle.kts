@@ -11,14 +11,16 @@ kotlin {
 
     jvm("desktop")
 
-    // device + Apple-Silicon simulator. Each links Krypton's per-arch libsignal_ffi.
-    iosArm64()
-    iosSimulatorArm64()
-    listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
-        target.binaries.framework {
-            baseName = "ComposeApp"
-            isStatic = true
-        }
+    // Bring-your-own-libsignal: Krypton ships no Signal binary, so a consumer (this
+    // sample included) supplies libsignal_ffi.a at link time with -L. Here we point
+    // at the in-repo build output; an external app points at its fetched dir
+    // (see scripts/fetch-libsignal-ffi.sh and the README "Bring your own libsignal").
+    val ffiDir = "${rootProject.projectDir}/krypton-protocol/libs/apple"
+    iosArm64 {
+        binaries.framework { baseName = "ComposeApp"; isStatic = true; linkerOpts("-L$ffiDir/ios-arm64") }
+    }
+    iosSimulatorArm64 {
+        binaries.framework { baseName = "ComposeApp"; isStatic = true; linkerOpts("-L$ffiDir/ios-sim-arm64") }
     }
 
     // The repo disables the default hierarchy template (krypton-protocol needs a

@@ -89,26 +89,29 @@ kotlin {
     // ── Cinterop: link libsignal_ffi on every Apple target ───────────────
     // Each target links its OWN-arch static lib from libs/apple/<arch>/ and the
     // `.def`'s `staticLibraries` directive EMBEDS that .a into the produced klib,
-    // so it ships inside the published artifact — consumers link it with no setup.
-    // The per-arch .a files are built fresh in CI (scripts/build-libsignal-ffi.sh,
-    // run by .github/workflows/release.yml); they are gitignored, never committed.
-    fun KotlinNativeCompilation.configureCInterop(libArchDir: String) {
-        cinterops {
-            val libsignalFfi by creating {
-                defFile(project.file("src/appleMain/cinterop/libsignal_ffi.def"))
-                packageName("org.signal.libsignal.ffi")
-                compilerOpts("-I${project.projectDir}/libs/apple")
-                extraOpts("-libraryPath", "${project.projectDir}/libs/apple/$libArchDir")
-            }
+    // BRING-YOUR-OWN-LIBSIGNAL (Model B): Krypton ships NO Signal binary. The
+    // cinterop generates bindings from headers only — the `.a` is never embedded
+    // in the published klib. Both Krypton's own tests AND consumers supply the
+    // libsignal_ffi.a at link time via -L, after fetching it from Signal's
+    // official source on their own machine (scripts/fetch-libsignal-ffi.sh).
+    fun org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget.configureLibsignal(libArchDir: String) {
+        val archDir = "${project.projectDir}/libs/apple/$libArchDir"
+        compilations.getByName("main").cinterops.create("libsignalFfi") {
+            defFile(project.file("src/appleMain/cinterop/libsignal_ffi.def"))
+            packageName("org.signal.libsignal.ffi")
+            compilerOpts("-I${project.projectDir}/libs/apple")
         }
+        // Local -L so Krypton's own test executables link the fetched .a. The
+        // published klib carries only `-lsignal_ffi`; consumers add their own -L.
+        binaries.all { linkerOpts("-L$archDir") }
     }
 
-    // Every Apple target links its own real per-arch .a (no cross-arch stand-ins).
-    macosArm64        { compilations.getByName("main").configureCInterop("macos-arm64") }  // Apple Silicon desktop
-    macosX64          { compilations.getByName("main").configureCInterop("macos-x64") }    // Intel desktop
-    iosArm64          { compilations.getByName("main").configureCInterop("ios-arm64") }    // device
-    iosSimulatorArm64 { compilations.getByName("main").configureCInterop("ios-sim-arm64") } // Apple Silicon sim
-    iosX64            { compilations.getByName("main").configureCInterop("ios-sim-x64") }  // Intel sim
+    // Each Apple target links its own arch's libsignal_ffi.a (consumer-supplied).
+    macosArm64        { configureLibsignal("macos-arm64") }   // Apple Silicon desktop
+    macosX64          { configureLibsignal("macos-x64") }     // Intel desktop
+    iosArm64          { configureLibsignal("ios-arm64") }     // device
+    iosSimulatorArm64 { configureLibsignal("ios-sim-arm64") } // Apple Silicon sim
+    iosX64            { configureLibsignal("ios-sim-x64") }   // Intel sim
 }
 
 android {

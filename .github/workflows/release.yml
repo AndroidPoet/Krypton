@@ -4,11 +4,11 @@ name: Release
 #
 # Why a single macOS runner: it can build EVERY Kotlin target — all Apple arches
 # natively, and it cross-compiles JVM, Android, Linux, Windows and wasm. The only
-# native binaries Krypton needs are the Apple `libsignal_ffi.a` files; JVM/Android
-# pull libsignal from Maven, and Linux/Windows/wasm are fail-loud (no binary). So
-# one job builds the .a FRESH from libsignal's pinned source, embeds them into the
-# klibs (cinterop `staticLibraries`), and publishes — consumers add one dependency
-# and the native binary travels inside the artifact.
+# Krypton publishes only cinterop bindings (no Signal binary embedded — see
+# SECURITY.md / "Bring your own libsignal"). This job builds the Apple .a FRESH
+# from libsignal's pinned source ONLY to run the real-crypto tests before
+# publishing; the published Apple klibs stay binding-only and Apple consumers
+# fetch libsignal themselves. JVM/Android libsignal comes from Maven.
 #
 # Trigger: push a tag like `v0.1.0`, or run manually. Set these repo secrets:
 #   MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD  — Central Portal token

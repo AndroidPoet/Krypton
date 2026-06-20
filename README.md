@@ -48,9 +48,13 @@ dependencies {
 }
 ```
 
-One line pulls the full API (`core` + `storage` + `protocol`) on every target. On JVM/Android,
-libsignal is fetched from Maven; on Apple, the native `libsignal_ffi.a` is embedded inside the
-published artifact — **your users add nothing else.**
+One line pulls the full API (`core` + `storage` + `protocol`) on every target.
+
+- **JVM / Android — nothing else to do.** libsignal is fetched from Signal's official Maven jars.
+- **Apple (iOS/macOS) — bring your own libsignal.** Krypton ships **no Signal binary**; you fetch
+  `libsignal_ffi` from Signal's official source on your own machine (one command) and point the
+  linker at it. See **[Bring your own libsignal](#bring-your-own-libsignal-apple)**. This is a
+  deliberate trust choice — Krypton never redistributes a binary you'd have to trust ([SECURITY.md](SECURITY.md)).
 
 > **Status — pre-first-release.** The Maven Central pipeline is wired and verified
 > ([Releasing](#releasing)); until the first tag is pushed, build locally with
@@ -127,10 +131,71 @@ The full Signal handshake (real ~1568-byte Kyber pre-key → X3DH → encrypt �
 by `NativeRealCryptoTest`, which **runs on the iOS simulator and macOS** in addition to the
 JVM/Android tracks.
 
+## Bring your own libsignal (Apple)
+
+Krypton's published Apple artifacts contain **only the cinterop bindings** (~88 KB) — **no Signal
+binary**. For Apple targets you fetch `libsignal_ffi` from Signal's official source on your own
+machine and point the linker at it. JVM/Android need none of this — libsignal comes from Maven
+automatically.
+
+### Option A — the Gradle plugin (recommended)
+
+Apply the Krypton Gradle plugin and it does everything: fetches `libsignal_ffi` from Signal's
+official source into a cache and wires the `-L` paths onto every Apple target automatically.
+
+```kotlin
+plugins {
+    kotlin("multiplatform")
+    id("io.krypton.libsignal") version "0.1.0"
+}
+
+kryptonLibsignal {
+    version.set("0.86.5")        // must match Krypton's pinned libsignal version
+    mode.set("build")           // "build" = compile Signal's official source (needs Rust)
+                                // "download" = Signal's official prebuilt (iOS-only) + checksum verify
+}
+```
+
+That's it — `linkDebugTestMacosArm64`, your iOS framework link, etc. all `dependsOn` the generated
+`fetchLibsignal` task, so a normal build just works. Nothing about libsignal is committed to your
+repo; the `.a` lives in `~/.krypton/libsignal/<version>/` (override with `cacheDir`).
+
+### Option B — the fetch script (no plugin)
+
+If you'd rather not apply a plugin, run the script and wire the linker yourself. Two official ways,
+both straight from Signal:
+
+```sh
+# Build from Signal's official source (needs Rust) — covers every arch, incl. macOS:
+scripts/fetch-libsignal-ffi.sh 0.86.5
+
+# …or download Signal's official prebuilt (iOS-only) and verify its checksum:
+LIBSIGNAL_FFI_PREBUILD_CHECKSUM=<sha256> scripts/fetch-libsignal-ffi.sh 0.86.5 "" download
+```
+
+Then add the printed `-L` path(s) to your app's Apple targets:
+
+```kotlin
+kotlin {
+    val ls = "${System.getProperty("user.home")}/.krypton/libsignal/0.86.5"
+    iosArm64          { binaries.all { linkerOpts("-L$ls/ios-arm64") } }
+    iosSimulatorArm64 { binaries.all { linkerOpts("-L$ls/ios-sim-arm64") } }
+    macosArm64        { binaries.all { linkerOpts("-L$ls/macos-arm64") } }
+}
+```
+
+> Either way, the libsignal version **must** match Krypton's pinned version (see the badge /
+> `gradle/libs.versions.toml`).
+
+The fetched `.a` is large (~77 MB) but that's a **build input, not your app** — a Release link keeps
+only the few MB you actually use (~3 MB; see [How big is it?](#how-big-is-it)).
+
 ## How big is it?
 
-Krypton's own code is negligible (~0.2 MB). The size is libsignal — and far smaller than the
-raw artifact suggests, because the linker keeps only what you call and release builds strip:
+Krypton's own published artifacts are tiny — the JVM jars are ~0.2 MB and the Apple klibs ~88 KB
+(bindings only; the libsignal binary is fetched on your machine, never shipped by Krypton). The
+size you ultimately link is libsignal itself — and far smaller than the raw archive suggests,
+because the linker keeps only what you call and release builds strip:
 
 | Platform | Real app-size impact (release) |
 | --- | --- |
@@ -139,6 +204,25 @@ raw artifact suggests, because the linker keeps only what you call and release b
 | JVM desktop | ~20 MB per OS |
 
 This is the same core that Signal and WhatsApp ship.
+
+### Why the 77 MB archive becomes ~3 MB
+
+The `libsignal_ffi.a` you fetch is a fat, unstripped archive — but it's a **build input, not
+something you ship**. Your Release link shrinks it automatically, in three layers:
+
+1. **Archive member selection.** A static `.a` is a bag of `.o` object files; the linker pulls in
+   *only* the ones that resolve a symbol you actually call. Unused modules are never included.
+2. **Dead-strip.** Within those, `-dead_strip` removes any function/data unreachable from your
+   entry points. Kotlin/Native Release and Xcode Release pass this automatically.
+3. **Symbol strip.** Release builds drop DWARF debug info into a separate `.dSYM` that isn't shipped.
+
+The one rule: **build Release.** Debug builds keep everything (that's expected — it's for dev);
+Release builds apply all three steps and produce the ~3 MB above. No flags to add. On Android the
+`.so` is dynamic so it can't dead-strip, but AGP strips its debug symbols on release and App Bundle
+ships only the device's ABI.
+
+> This is identical under [Bring your own libsignal](#bring-your-own-libsignal-apple) — stripping
+> always happens at *your* final link, so the BYO trust model costs you nothing in app size.
 
 ## API parity with libsignal
 
@@ -217,6 +301,7 @@ It needs four repo secrets: `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, 
 | `krypton-protocol` | The Signal Protocol + the per-platform libsignal bridges |
 | `krypton-sealed-sender` | Sealed-sender convenience wrapper |
 | `krypton-zkgroup` | Client-side zkgroup — params, profile derivations, group cipher |
+| `krypton-gradle-plugin` | `id("io.krypton.libsignal")` — fetches libsignal from Signal's source & wires Apple targets |
 
 ## Contributing
 

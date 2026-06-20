@@ -16,6 +16,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "krypton"
 
+include(":krypton-gradle-plugin")
 include(":krypton-core")
 include(":krypton")
 include(":krypton-storage")

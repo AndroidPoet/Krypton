@@ -1,7 +1,12 @@
-# libraryPaths is supplied per-target by the Gradle build (configureCInterop) so
-# each Apple target links its OWN-arch libsignal_ffi.a (macos-arm64 / ios-arm64 /
-# ios-sim-arm64). compilerOpts uses a project-relative -I so the header resolves
-# regardless of checkout path.
+# Bring-your-own-libsignal (Model B): Krypton does NOT embed Signal's binary.
+# This cinterop compiles bindings from the headers only; the actual
+# libsignal_ffi.a is supplied at LINK time by the consumer, who fetches it from
+# Signal's official source on their own machine (scripts/fetch-libsignal-ffi.sh
+# or build-libsignal-ffi.sh) and points the linker at it with -L<dir>.
+#
+# `linkerOpts = -lsignal_ffi` is recorded in the published klib so the consumer
+# only needs to add the -L search path. No Signal binary is shipped by Krypton —
+# the trust anchor is Signal, and there is nothing of ours to suspect.
 headers = krypton_ffi.h
 headerFilter = krypton_ffi.*
-staticLibraries = libsignal_ffi.a
+linkerOpts = -lsignal_ffi
