@@ -8,18 +8,17 @@ import io.krypton.protocol.api.decrypt
 import io.krypton.protocol.api.encrypt
 import io.krypton.storage.memory.InMemoryPreKeyStore
 import kotlinx.coroutines.runBlocking
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
  * Real end-to-end crypto on Apple platforms — exercises the actual [NativeBridge]
- * against libsignal_ffi (no fakes). Runs on every Apple target via `appleTest`.
+ * against libsignal_ffi 0.86.5 (no fakes). Runs on every Apple target via `appleTest`.
  *
- * Status: the **send path** (real Kyber pre-key generation + X3DH + encrypt) is
- * verified here. The full **receive path** (PreKey decrypt) is a known WIP — see
- * the `@Ignore`d test below; it is documented openly, not faked.
+ * Both the **send path** (real Kyber pre-key + X3DH + encrypt) and the full
+ * **receive path** (PreKey decrypt, full round-trip) are verified here against
+ * real libsignal — matching the JVM/Android tracks.
  */
 class NativeRealCryptoTest {
 
@@ -67,14 +66,13 @@ class NativeRealCryptoTest {
     }
 
     /**
-     * KNOWN ISSUE (not yet passing): the native PreKey **decrypt** path returns
-     * libsignal error 30 (InvalidMessage). The send path above is correct; the
-     * receive-path FFI store wiring needs more work. Kept and `@Ignore`d so the
-     * gap is tracked in the open instead of pretending it works.
+     * Full native round-trip: Alice runs X3DH against Bob's bundle, encrypts a
+     * PreKey message, and Bob decrypts it back to plaintext — all on real
+     * libsignal_ffi 0.86.5. (Previously failed with InvalidMessage/error 30 when
+     * the bridge was built against a mismatched newer-API libsignal binary.)
      */
-    @Ignore
     @Test
-    fun `real native full encrypt-decrypt round-trip WIP InvalidMessage on receive`() = runBlocking {
+    fun `real native full encrypt-decrypt round-trip`() = runBlocking {
         val (alice, _) = protocolWithPreKeys()
         val (bob, _) = protocolWithPreKeys()
         val bobAddr = ProtocolAddress("bob", DeviceId.PRIMARY)

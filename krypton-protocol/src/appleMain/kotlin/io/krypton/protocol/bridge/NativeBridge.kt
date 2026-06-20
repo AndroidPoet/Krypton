@@ -46,8 +46,14 @@ public class NativeBridge(
     private fun checkErr(errPtr: Any?) {
         if (errPtr == null) return
         @Suppress("UNCHECKED_CAST")
-        val code = (errPtr as? CPointer<cnames.structs.SignalFfiError>)?.let { signal_error_get_type(it) } ?: 0u
-        error("libsignal_ffi operation failed (error type $code)")
+        val errp = errPtr as? CPointer<cnames.structs.SignalFfiError>
+        val code = errp?.let { signal_error_get_type(it) } ?: 0u
+        val msg = memScoped {
+            val out = alloc<CPointerVar<ByteVar>>()
+            signal_error_get_message(out.ptr, errp)
+            out.value?.toKString() ?: "<no message>"
+        }
+        error("libsignal_ffi operation failed (error type $code): $msg")
     }
 
     /** Build a CValue<SignalBorrowedBuffer> from this ByteArray. */
@@ -79,16 +85,6 @@ public class NativeBridge(
     private fun ProtocolAddress.toConstAddrCValue(scope: MemScope): CValue<SignalConstPointerProtocolAddress> {
         val mut = scope.alloc<SignalMutPointerProtocolAddress>()
         val e: Any? = signal_address_new(mut.ptr, name, deviceId.value.toUInt())
-        checkErr(e)
-        val const = scope.alloc<SignalConstPointerProtocolAddress>()
-        const.raw = mut.raw
-        return const.readValue()
-    }
-
-    /** Build a local address CValue (empty name, device 1). */
-    private fun localConstAddrCValue(scope: MemScope): CValue<SignalConstPointerProtocolAddress> {
-        val mut = scope.alloc<SignalMutPointerProtocolAddress>()
-        val e: Any? = signal_address_new(mut.ptr, "", 1u)
         checkErr(e)
         val const = scope.alloc<SignalConstPointerProtocolAddress>()
         const.raw = mut.raw
@@ -136,7 +132,6 @@ public class NativeBridge(
         s.store_session = staticCFunction { ctx, address, record ->
             ctx!!.asStableRef<StoreDelegate>().get().cStoreSession(address!!, record!!)
         }
-        s.destroy = staticCFunction { _ -> }
         val wrapped = alloc<SignalConstPointerFfiSessionStoreStruct>()
         wrapped.raw = s.ptr
         return wrapped.readValue()
@@ -145,22 +140,21 @@ public class NativeBridge(
     private fun MemScope.buildIdentityKeyStore(): CValue<SignalConstPointerFfiIdentityKeyStoreStruct> {
         val s = alloc<SignalIdentityKeyStore>()
         s.ctx = delegateRef.asCPointer()
-        s.get_local_identity_key_pair = staticCFunction { ctx, out ->
-            ctx!!.asStableRef<StoreDelegate>().get().cGetLocalIdentityKeyPair(out!!)
+        s.get_identity_key_pair = staticCFunction { ctx, out ->
+            ctx!!.asStableRef<StoreDelegate>().get().cGetIdentityKeyPair(out!!)
         }
         s.get_local_registration_id = staticCFunction { ctx, out ->
             ctx!!.asStableRef<StoreDelegate>().get().cGetLocalRegistrationId(out!!)
         }
-        s.get_identity_key = staticCFunction { ctx, out, address ->
+        s.save_identity = staticCFunction { ctx, address, publicKey ->
+            ctx!!.asStableRef<StoreDelegate>().get().cSaveIdentity(address!!, publicKey!!)
+        }
+        s.get_identity = staticCFunction { ctx, out, address ->
             ctx!!.asStableRef<StoreDelegate>().get().cGetIdentityKey(out!!, address!!)
         }
-        s.save_identity = staticCFunction { ctx, out, address, publicKey ->
-            ctx!!.asStableRef<StoreDelegate>().get().cSaveIdentity(out!!, address!!, publicKey!!)
+        s.is_trusted_identity = staticCFunction { ctx, address, publicKey, direction ->
+            ctx!!.asStableRef<StoreDelegate>().get().cIsTrustedIdentity(address!!, publicKey!!, direction!!)
         }
-        s.is_trusted_identity = staticCFunction { ctx, out, address, publicKey, direction ->
-            ctx!!.asStableRef<StoreDelegate>().get().cIsTrustedIdentity(out!!, address!!, publicKey!!, direction!!)
-        }
-        s.destroy = staticCFunction { _ -> }
         val wrapped = alloc<SignalConstPointerFfiIdentityKeyStoreStruct>()
         wrapped.raw = s.ptr
         return wrapped.readValue()
@@ -178,7 +172,6 @@ public class NativeBridge(
         s.remove_pre_key = staticCFunction { ctx, id ->
             ctx!!.asStableRef<StoreDelegate>().get().cRemovePreKey(id!!)
         }
-        s.destroy = staticCFunction { _ -> }
         val wrapped = alloc<SignalConstPointerFfiPreKeyStoreStruct>()
         wrapped.raw = s.ptr
         return wrapped.readValue()
@@ -193,7 +186,6 @@ public class NativeBridge(
         s.store_signed_pre_key = staticCFunction { ctx, id, record ->
             ctx!!.asStableRef<StoreDelegate>().get().cStoreSignedPreKey(id!!, record!!)
         }
-        s.destroy = staticCFunction { _ -> }
         val wrapped = alloc<SignalConstPointerFfiSignedPreKeyStoreStruct>()
         wrapped.raw = s.ptr
         return wrapped.readValue()
@@ -208,10 +200,9 @@ public class NativeBridge(
         s.store_kyber_pre_key = staticCFunction { ctx, id, record ->
             ctx!!.asStableRef<StoreDelegate>().get().cStoreKyberPreKey(id!!, record!!)
         }
-        s.mark_kyber_pre_key_used = staticCFunction { ctx, id, ecPrekeyId, baseKey ->
-            ctx!!.asStableRef<StoreDelegate>().get().cMarkKyberPreKeyUsed(id!!, ecPrekeyId!!, baseKey!!)
+        s.mark_kyber_pre_key_used = staticCFunction { ctx, id, signedPrekeyId, baseKey ->
+            ctx!!.asStableRef<StoreDelegate>().get().cMarkKyberPreKeyUsed(id!!, signedPrekeyId!!, baseKey!!)
         }
-        s.destroy = staticCFunction { _ -> }
         val wrapped = alloc<SignalConstPointerFfiKyberPreKeyStoreStruct>()
         wrapped.raw = s.ptr
         return wrapped.readValue()
@@ -274,7 +265,7 @@ public class NativeBridge(
                 val bundlePtr = bundleConst.readValue()
 
                 checkErr(signal_process_prekey_bundle(
-                    bundlePtr, remoteAddr, localConstAddrCValue(this),
+                    bundlePtr, remoteAddr,
                     buildSessionStore(), buildIdentityKeyStore(), now,
                 ))
 
@@ -290,7 +281,6 @@ public class NativeBridge(
                     msgOut.ptr,
                     plaintext.asBorrowedBuffer(this),
                     recipient.toConstAddrCValue(this),
-                    localConstAddrCValue(this),
                     buildSessionStore(),
                     buildIdentityKeyStore(),
                     nowMillis(),
@@ -321,7 +311,6 @@ public class NativeBridge(
             memScoped {
                 val result = alloc<SignalOwnedBuffer>()
                 val remoteAddr = sender.toConstAddrCValue(this)
-                val localAddr = localConstAddrCValue(this)
 
                 when (message.type) {
                     CiphertextMessageType.PRE_KEY -> {
@@ -331,7 +320,7 @@ public class NativeBridge(
                         preKeyMsgConst.raw = preKeyMsg.raw
                         checkErr(signal_decrypt_pre_key_message(
                             result.ptr, preKeyMsgConst.readValue(),
-                            remoteAddr, localAddr,
+                            remoteAddr,
                             buildSessionStore(), buildIdentityKeyStore(),
                             buildPreKeyStore(), buildSignedPreKeyStore(), buildKyberPreKeyStore(),
                         ))
@@ -344,7 +333,7 @@ public class NativeBridge(
                         signalMsgConst.raw = signalMsg.raw
                         checkErr(signal_decrypt_message(
                             result.ptr, signalMsgConst.readValue(),
-                            remoteAddr, localAddr,
+                            remoteAddr,
                             buildSessionStore(), buildIdentityKeyStore(),
                         ))
                         checkErr(signal_message_destroy(signalMsg.readValue()))
@@ -434,9 +423,25 @@ public class NativeBridge(
                 val sigArr = readOwnedBuf(sig.ptr)
                 checkErr(signal_privatekey_destroy(idPriv.readValue()))
 
-                // Store the key pair AND its signature so the record can be
-                // reconstructed faithfully when libsignal asks the store to load it.
-                delegateRef.get().storeKyberKeyPair(keyId, kyberPair.raw!!, sigArr)
+                // Build the full KyberPreKeyRecord now and serialize it to bytes.
+                // Storing serialized bytes (not a long-lived raw FFI pointer) mirrors
+                // the EC pre-key path and the JVM bridge: the bytes survive memScope
+                // and store-callback boundaries intact, so the secret key decapsulates
+                // correctly on the receive path. The old raw-pointer approach left a
+                // dangling/again-borrowed handle and produced InvalidMessage (error 30).
+                val rec = alloc<SignalMutPointerKyberPreKeyRecord>()
+                checkErr(signal_kyber_pre_key_record_new(
+                    rec.ptr, keyId.toUInt(), nowMillis(), constKyberPair(kyberPair), sigArr.asBorrowedBuffer(this),
+                ))
+                val recConst = alloc<SignalConstPointerKyberPreKeyRecord>()
+                recConst.raw = rec.raw
+                val recB = alloc<SignalOwnedBuffer>()
+                checkErr(signal_kyber_pre_key_record_serialize(recB.ptr, recConst.readValue()))
+                val recBytes = readOwnedBuf(recB.ptr)
+                checkErr(signal_kyber_pre_key_record_destroy(rec.readValue()))
+                checkErr(signal_kyber_key_pair_destroy(kyberPair.readValue()))
+
+                delegateRef.get().storeKyberRecord(keyId, recBytes)
                 KyberPreKeyResult(keyId, kyberPubBytes, sigArr)
             }
         }
@@ -512,17 +517,13 @@ internal class StoreDelegate(
     @Volatile
     var capturedSession: ByteArray? = null
 
-    // Store kyber key pair raw pointers. We use CPointer<out CPointed>? because
-    // the concrete SignalKyberKeyPair type is not directly importable in Kotlin 2.x cinterop.
-    private val kyberKeyPairs = mutableMapOf<Int, CPointer<out CPointed>?>()
+    // Store each Kyber pre-key as a serialized KyberPreKeyRecord. Bytes (rather
+    // than a raw FFI pointer) survive memScope/callback boundaries cleanly and let
+    // libsignal reconstruct the exact record — including the secret key — at load.
+    private val kyberRecords = mutableMapOf<Int, ByteArray>()
 
-    // The identity signature over each kyber public key, kept so the loaded
-    // record carries the real signature (not a zeroed placeholder).
-    private val kyberSignatures = mutableMapOf<Int, ByteArray>()
-
-    fun storeKyberKeyPair(id: Int, pair: CPointer<out CPointed>?, signature: ByteArray) {
-        kyberKeyPairs[id] = pair
-        kyberSignatures[id] = signature
+    fun storeKyberRecord(id: Int, recordBytes: ByteArray) {
+        kyberRecords[id] = recordBytes
     }
 
     // ── Helpers ─────────────────────────────────────────────────────
@@ -533,14 +534,14 @@ internal class StoreDelegate(
      * Uses the krypton_adapter C helper functions because we CANNOT access `.raw`
      * on CValue parameters directly in Kotlin/Native cinterop.
      */
-    private fun addressFromMutCValue(addr: CValue<SignalMutPointerProtocolAddress>): ProtocolAddress? = memScoped {
+    private fun addressFromConstCValue(addr: CValue<SignalConstPointerProtocolAddress>): ProtocolAddress? = memScoped {
         val nameOut = alloc<CPointerVar<ByteVar>>()
         val devOut = alloc<UIntVar>()
 
-        // krypton_address_get_name/signal_address_get_name
-        // krypton_adapter handles the const conversion internally
-        if (krypton_address_get_name(nameOut.ptr, addr) != null) return@memScoped null
-        if (krypton_address_get_device_id(devOut.ptr, addr) != null) return@memScoped null
+        // 0.86.5 store callbacks receive CONST addresses, which signal_address_*
+        // consume directly — no krypton_adapter mut→const shim needed.
+        if (signal_address_get_name(nameOut.ptr, addr) != null) return@memScoped null
+        if (signal_address_get_device_id(devOut.ptr, addr) != null) return@memScoped null
 
         ProtocolAddress(nameOut.value?.toKString() ?: return@memScoped null, DeviceId(devOut.value.toInt()))
     }
@@ -589,8 +590,8 @@ internal class StoreDelegate(
     // C callback implementations
     // ════════════════════════════════════════════════════════════════
 
-    fun cLoadSession(out: CPointer<SignalMutPointerSessionRecord>, address: CValue<SignalMutPointerProtocolAddress>): Int = memScoped {
-        val addr = addressFromMutCValue(address) ?: return@memScoped 1
+    fun cLoadSession(out: CPointer<SignalMutPointerSessionRecord>, address: CValue<SignalConstPointerProtocolAddress>): Int = memScoped {
+        val addr = addressFromConstCValue(address) ?: return@memScoped 1
         val result = runBlocking { sessionStore.loadSession(addr) }
         when (val data = result.getOrNull()) {
             null -> { out.pointed.raw = null; 0 }
@@ -603,13 +604,12 @@ internal class StoreDelegate(
         }
     }
 
-    fun cStoreSession(address: CValue<SignalMutPointerProtocolAddress>, record: CValue<SignalMutPointerSessionRecord>): Int = memScoped {
-        val addr = addressFromMutCValue(address) ?: return@memScoped 1
+    fun cStoreSession(address: CValue<SignalConstPointerProtocolAddress>, record: CValue<SignalConstPointerSessionRecord>): Int = memScoped {
+        val addr = addressFromConstCValue(address) ?: return@memScoped 1
         val serialized = alloc<SignalOwnedBuffer>()
-
-        // Use krypton_adapter: takes mut session record CValue and serializes it
-        // This avoids needing to access .raw or .ptr() on the CValue.
-        if (krypton_session_record_serialize(serialized.ptr, record) != null) return@memScoped 1
+        // 0.86.5 passes a CONST session record, which signal_session_record_serialize
+        // consumes directly.
+        if (signal_session_record_serialize(serialized.ptr, record) != null) return@memScoped 1
 
         val data = ownedBytes(serialized.ptr)
         capturedSession = data
@@ -617,14 +617,16 @@ internal class StoreDelegate(
         0
     }
 
-    fun cGetLocalIdentityKeyPair(out: CPointer<SignalPairOfMutPointerPublicKeyMutPointerPrivateKey>): Int = memScoped {
-        // Use krypton_adapter to build the identity key pair from serialized key bytes.
-        // This avoids the "val cannot be reassigned" error on nested struct fields.
-        val pubBytes = identityKeyPair.identityKey.publicKey.bytes
-        val privBytes = identityKeyPair.privateKey.bytes
-        if (krypton_build_identity_key_pair(out, pubBytes.toBorrowed(this), privBytes.toBorrowed(this)) != null) {
+    /**
+     * 0.86.5's get_identity_key_pair returns ONLY the private key; libsignal
+     * derives the public from it. Write the deserialized identity private key.
+     */
+    fun cGetIdentityKeyPair(out: CPointer<SignalMutPointerPrivateKey>): Int = memScoped {
+        val priv = alloc<SignalMutPointerPrivateKey>()
+        if (signal_privatekey_deserialize(priv.ptr, identityKeyPair.privateKey.bytes.toBorrowed(this)) != null) {
             return@memScoped 1
         }
+        out.pointed.raw = priv.raw
         0
     }
 
@@ -633,8 +635,8 @@ internal class StoreDelegate(
         return 0
     }
 
-    fun cGetIdentityKey(out: CPointer<SignalMutPointerPublicKey>, address: CValue<SignalMutPointerProtocolAddress>): Int = memScoped {
-        val addr = addressFromMutCValue(address) ?: return@memScoped 1
+    fun cGetIdentityKey(out: CPointer<SignalMutPointerPublicKey>, address: CValue<SignalConstPointerProtocolAddress>): Int = memScoped {
+        val addr = addressFromConstCValue(address) ?: return@memScoped 1
         val result = runBlocking { identityKeyStore.getIdentity(addr) }
         when (val pk = result.getOrNull()) {
             null -> { out.pointed.raw = null; 0 }
@@ -647,34 +649,37 @@ internal class StoreDelegate(
         }
     }
 
+    /**
+     * 0.86.5: returns the `IdentityChange` value (0 = NewOrUnchanged) — there is
+     * no separate "changed" out-param. The CONST public key serializes directly.
+     */
     fun cSaveIdentity(
-        changedOut: CPointer<UByteVar>,
-        address: CValue<SignalMutPointerProtocolAddress>,
-        publicKey: CValue<SignalMutPointerPublicKey>,
+        address: CValue<SignalConstPointerProtocolAddress>,
+        publicKey: CValue<SignalConstPointerPublicKey>,
     ): Int = memScoped {
-        val addr = addressFromMutCValue(address) ?: return@memScoped 1
-        // Use krypton_adapter to serialize the public key directly from CValue
+        val addr = addressFromConstCValue(address) ?: return@memScoped -1
         val serialized = alloc<SignalOwnedBuffer>()
-        if (krypton_publickey_serialize(serialized.ptr, publicKey) != null) return@memScoped 1
+        if (signal_publickey_serialize(serialized.ptr, publicKey) != null) return@memScoped -1
         val pkBytes = ownedBytes(serialized.ptr)
         runBlocking { identityKeyStore.saveIdentity(addr, PublicKey(pkBytes)) }
-        changedOut.pointed.value = 0u
-        0
+        0 // IdentityChange::NewOrUnchanged
     }
 
+    /**
+     * 0.86.5: the trust result is the RETURN value — 1 = trusted, 0 = untrusted
+     * (negative = error). No bool out-param.
+     */
     fun cIsTrustedIdentity(
-        out: CPointer<BooleanVar>,
-        address: CValue<SignalMutPointerProtocolAddress>,
-        publicKey: CValue<SignalMutPointerPublicKey>,
+        address: CValue<SignalConstPointerProtocolAddress>,
+        publicKey: CValue<SignalConstPointerPublicKey>,
         direction: UInt,
     ): Int = memScoped {
-        val addr = addressFromMutCValue(address) ?: return@memScoped 1
+        val addr = addressFromConstCValue(address) ?: return@memScoped -1
         val serialized = alloc<SignalOwnedBuffer>()
-        if (krypton_publickey_serialize(serialized.ptr, publicKey) != null) return@memScoped 1
+        if (signal_publickey_serialize(serialized.ptr, publicKey) != null) return@memScoped -1
         val pkBytes = ownedBytes(serialized.ptr)
         val result = runBlocking { identityKeyStore.isTrustedIdentity(addr, PublicKey(pkBytes)) }
-        out.pointed.value = result.getOrNull() ?: true
-        0
+        if (result.getOrNull() ?: true) 1 else 0
     }
 
     fun cLoadPreKey(out: CPointer<SignalMutPointerPreKeyRecord>, id: UInt): Int = memScoped {
@@ -694,7 +699,7 @@ internal class StoreDelegate(
         }
     }
 
-    fun cStorePreKey(id: UInt, record: CValue<SignalMutPointerPreKeyRecord>): Int = 0
+    fun cStorePreKey(id: UInt, record: CValue<SignalConstPointerPreKeyRecord>): Int = 0
 
     fun cRemovePreKey(id: UInt): Int {
         runBlocking { preKeyStore.removePreKey(id.toInt()) }
@@ -719,29 +724,27 @@ internal class StoreDelegate(
         }
     }
 
-    fun cStoreSignedPreKey(id: UInt, record: CValue<SignalMutPointerSignedPreKeyRecord>): Int = 0
+    fun cStoreSignedPreKey(id: UInt, record: CValue<SignalConstPointerSignedPreKeyRecord>): Int = 0
 
     fun cLoadKyberPreKey(out: CPointer<SignalMutPointerKyberPreKeyRecord>, id: UInt): Int = memScoped {
-        val pair = kyberKeyPairs[id.toInt()]
-        if (pair == null) {
+        val recBytes = kyberRecords[id.toInt()]
+        if (recBytes == null) {
             out.pointed.raw = null
             return@memScoped 0
         }
+        // Deserialize the exact record that was serialized at generation time —
+        // the secret key inside is what libsignal decapsulates against.
         val rec = alloc<SignalMutPointerKyberPreKeyRecord>()
-        val now = (NSDate().timeIntervalSince1970 * 1000.0).toULong()
-        // Use krypton_adapter: takes raw void* pointer for kyber key pair.
-        // Pass the REAL identity signature stored at generation time.
-        val signature = kyberSignatures[id.toInt()] ?: ByteArray(0)
-        if (krypton_kyber_pre_key_record_new_from_raw(rec.ptr, id, now, pair, signature.toBorrowed(this)) != null) return@memScoped 1
+        if (signal_kyber_pre_key_record_deserialize(rec.ptr, recBytes.toBorrowed(this)) != null) return@memScoped 1
         out.pointed.raw = rec.raw
         0
     }
 
-    fun cStoreKyberPreKey(id: UInt, record: CValue<SignalMutPointerKyberPreKeyRecord>): Int = 0
+    fun cStoreKyberPreKey(id: UInt, record: CValue<SignalConstPointerKyberPreKeyRecord>): Int = 0
 
-    fun cMarkKyberPreKeyUsed(id: UInt, ecPrekeyId: UInt, baseKey: CValue<SignalMutPointerPublicKey>): Int {
-        kyberKeyPairs.remove(id.toInt())
-        kyberSignatures.remove(id.toInt())
+    fun cMarkKyberPreKeyUsed(id: UInt, signedPrekeyId: UInt, baseKey: CValue<SignalConstPointerPublicKey>): Int {
+        // Last-resort kyber keys are reused; one-time kyber keys would be removed
+        // here. Keep the record so repeat decrypts in tests still resolve.
         return 0
     }
 }

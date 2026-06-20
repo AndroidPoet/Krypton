@@ -1,0 +1,26 @@
+version: 2
+
+# Observe libsignal releases automatically. Dependabot watches Maven Central for
+# new org.signal:libsignal-* versions and opens a PR bumping the single
+# `libsignal` ref in gradle/libs.versions.toml. Because libsignal-client and
+# libsignal-android both use version.ref = "libsignal", that one bump moves BOTH
+# the JVM/Android Maven coords and (via ci.yml rebuilding the .a from source) the
+# Apple native track in lockstep. The PR then triggers ci.yml, which clones
+# signalapp/libsignal at the new tag, rebuilds libsignal_ffi.a, and runs the
+# real-crypto tests on JVM + iOS — so a bad/ABI-changing version goes red on the
+# PR instead of in a release.
+updates:
+  - package-ecosystem: gradle
+    directory: "/"
+    schedule:
+      interval: daily
+    # Only libsignal must stay in lockstep with the native binary; let the rest
+    # be bumped manually so unrelated deps don't churn the (heavy) native CI.
+    allow:
+      - dependency-name: "org.signal:libsignal-client"
+      - dependency-name: "org.signal:libsignal-android"
+    commit-message:
+      prefix: chore
+    labels:
+      - libsignal-bump
+    open-pull-requests-limit: 1

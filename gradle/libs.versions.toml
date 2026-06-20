@@ -6,6 +6,8 @@ serialization = "1.7.3"
 ktor = "3.0.3"
 compose-bom = "2024.12.01"
 activity-compose = "1.9.3"
+compose-multiplatform = "1.7.3"
+vanniktech = "0.30.0"
 # Single source of truth for libsignal across BOTH tracks:
 #  - JVM/Android: the Maven coordinates below (version.ref = "libsignal")
 #  - Apple/native: the prebuilt libsignal_ffi.a, whose version is recorded in
@@ -26,8 +28,11 @@ libsignal-android = { module = "org.signal:libsignal-android", version.ref = "li
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
+vanniktech-publish = { id = "com.vanniktech.maven.publish", version.ref = "vanniktech" }

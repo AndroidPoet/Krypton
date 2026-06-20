@@ -1,5 +1,7 @@
+# libraryPaths is supplied per-target by the Gradle build (configureCInterop) so
+# each Apple target links its OWN-arch libsignal_ffi.a (macos-arm64 / ios-arm64 /
+# ios-sim-arm64). compilerOpts uses a project-relative -I so the header resolves
+# regardless of checkout path.
 headers = krypton_ffi.h
 headerFilter = krypton_ffi.*
-staticLibraries = libsignal_ffi.a libkrypton_adapter.a
-libraryPaths = /Users/ranbirsingh/krypton/krypton-protocol/libs/apple
-compilerOpts = -I/Users/ranbirsingh/krypton/krypton-protocol/libs/apple
+staticLibraries = libsignal_ffi.a

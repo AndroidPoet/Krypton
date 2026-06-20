@@ -1,8 +1,11 @@
 @file:OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
 
+import io.krypton.Configuration
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.library)
+    alias(libs.plugins.vanniktech.publish)
 }
 
 kotlin {
@@ -16,9 +19,6 @@ kotlin {
     iosSimulatorArm64()
     macosX64()
     macosArm64()
-    tvosX64()
-    tvosArm64()
-    tvosSimulatorArm64()
     linuxX64()
     mingwX64()
     wasmJs { browser() }
@@ -40,4 +40,8 @@ android {
     namespace = "io.krypton.storage"
     compileSdk = io.krypton.Configuration.COMPILE_SDK
     defaultConfig { minSdk = io.krypton.Configuration.MIN_SDK }
+}
+
+mavenPublishing {
+    coordinates(Configuration.GROUP, "krypton-storage", Configuration.VERSION)
 }

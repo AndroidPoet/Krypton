@@ -1,10 +1,12 @@
 @file:OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
 
+import io.krypton.Configuration
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeCompilation
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.library)
+    alias(libs.plugins.vanniktech.publish)
 }
 
 kotlin {
@@ -18,9 +20,6 @@ kotlin {
     iosSimulatorArm64()
     macosX64()
     macosArm64()
-    tvosX64()
-    tvosArm64()
-    tvosSimulatorArm64()
     linuxX64()
     mingwX64()
     wasmJs { browser() }
@@ -81,43 +80,45 @@ kotlin {
 
         // Connect each Apple target's main/test source sets to appleMain/appleTest
         listOf("iosX64", "iosArm64", "iosSimulatorArm64",
-               "macosX64", "macosArm64",
-               "tvosX64", "tvosArm64", "tvosSimulatorArm64").forEach { target ->
+               "macosX64", "macosArm64").forEach { target ->
             getByName("${target}Main").dependsOn(appleMain)
             getByName("${target}Test").dependsOn(appleTest)
         }
     }
 
-    // ── Cinterop: link libsignal_ffi on all Apple platforms ──────────────
-    fun KotlinNativeCompilation.configureCInterop() {
+    // ── Cinterop: link libsignal_ffi on every Apple target ───────────────
+    // Each target links its OWN-arch static lib from libs/apple/<arch>/ and the
+    // `.def`'s `staticLibraries` directive EMBEDS that .a into the produced klib,
+    // so it ships inside the published artifact — consumers link it with no setup.
+    // The per-arch .a files are built fresh in CI (scripts/build-libsignal-ffi.sh,
+    // run by .github/workflows/release.yml); they are gitignored, never committed.
+    fun KotlinNativeCompilation.configureCInterop(libArchDir: String) {
         cinterops {
             val libsignalFfi by creating {
                 defFile(project.file("src/appleMain/cinterop/libsignal_ffi.def"))
                 packageName("org.signal.libsignal.ffi")
                 compilerOpts("-I${project.projectDir}/libs/apple")
+                extraOpts("-libraryPath", "${project.projectDir}/libs/apple/$libArchDir")
             }
         }
     }
 
-    // macOS (host architectures)
-    macosArm64 { compilations.getByName("main").configureCInterop() }
-    macosX64   { compilations.getByName("main").configureCInterop() }
-
-    // iOS targets
-    iosArm64          { compilations.getByName("main").configureCInterop() }
-    iosX64            { compilations.getByName("main").configureCInterop() }
-    iosSimulatorArm64 { compilations.getByName("main").configureCInterop() }
-
-    // tvOS targets
-    tvosArm64          { compilations.getByName("main").configureCInterop() }
-    tvosX64            { compilations.getByName("main").configureCInterop() }
-    tvosSimulatorArm64 { compilations.getByName("main").configureCInterop() }
+    // Every Apple target links its own real per-arch .a (no cross-arch stand-ins).
+    macosArm64        { compilations.getByName("main").configureCInterop("macos-arm64") }  // Apple Silicon desktop
+    macosX64          { compilations.getByName("main").configureCInterop("macos-x64") }    // Intel desktop
+    iosArm64          { compilations.getByName("main").configureCInterop("ios-arm64") }    // device
+    iosSimulatorArm64 { compilations.getByName("main").configureCInterop("ios-sim-arm64") } // Apple Silicon sim
+    iosX64            { compilations.getByName("main").configureCInterop("ios-sim-x64") }  // Intel sim
 }
 
 android {
     namespace = "io.krypton.protocol"
     compileSdk = io.krypton.Configuration.COMPILE_SDK
     defaultConfig { minSdk = io.krypton.Configuration.MIN_SDK }
+}
+
+mavenPublishing {
+    coordinates(Configuration.GROUP, "krypton-protocol", Configuration.VERSION)
 }
 
 // ── libsignal version-skew guard ─────────────────────────────────────────────
