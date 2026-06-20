@@ -222,13 +222,35 @@ Krypton's own published artifacts are tiny — the JVM jars are ~0.2 MB and the 
 size you ultimately link is libsignal itself — and far smaller than the raw archive suggests,
 because the linker keeps only what you call and release builds strip:
 
-| Platform | Real app-size impact (release) |
-| --- | --- |
-| iOS / macOS | **~3 MB** (static lib, dead-stripped at link) |
-| Android (per ABI) | **~3 MB download / ~6.4 MB installed** (AGP strips `.so` on release) |
-| JVM desktop | ~20 MB per OS |
+| Platform | What's bundled | Real app-size impact (release) |
+| --- | --- | --- |
+| iOS / macOS | dead-stripped static code | **~3 MB** per arch (one arch per device via App Store thinning) |
+| Android (per ABI) | one `.so`, AGP-stripped | **~3 MB download / ~6.4 MB installed** (down from ~70 MB in the AAR) |
+| JVM desktop (macOS) | whole `.dylib` | **~20 MB** |
+| JVM (Windows) | whole `.dll` | **~16 MB** |
+| JVM server (Linux) | whole `.so`, **unstripped** | **~120 MB** (see note) |
 
 This is the same core that Signal and WhatsApp ship.
+
+**By default you get everything** — every platform and arch works out of the box, no exclusions
+required. The notes below are *optional* size optimizations, not steps you have to take.
+
+#### Optional: trim JVM size
+
+The JVM jar carries Signal's native for **every** OS (macOS arm64+amd64, Linux, Windows), and the
+Linux `.so` is shipped unstripped (~120 MB). A fat-jar that bundles all of them is large by default.
+If size matters, two opt-in trims:
+
+```kotlin
+// 1. Drop libsignal's own test natives (never needed in production):
+configurations.all { exclude(group = "org.signal", module = "libsignal-client-testing") }
+
+// 2. In your packaging (shadowJar / jpackage), keep only the OS(es) you ship:
+//    e.g. exclude **/libsignal_jni_amd64.so on a Mac-only desktop build.
+```
+
+For a Linux server you can also `strip` the extracted `.so` in your image build — most of the
+120 MB is debug info.
 
 ### Why the 77 MB archive becomes ~3 MB
 
