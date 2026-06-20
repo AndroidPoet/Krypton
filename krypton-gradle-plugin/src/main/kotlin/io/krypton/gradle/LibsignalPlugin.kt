@@ -137,6 +137,7 @@ class LibsignalPlugin : Plugin<Project> {
             }
         }
         File(out, "target").deleteRecursively()
+        dest.delete()
         project.logger.lifecycle(
             "Krypton: prebuilt is iOS-only (no macOS). For macOS targets use mode \"build\".",
         )
