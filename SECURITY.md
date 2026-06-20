@@ -35,6 +35,66 @@ a binary, you didn't get it from us.
   fails the build if the libsignal version used for the native side ever differs from the
   JVM/Android Maven version — so two peers can't silently land on incompatible wire formats.
 
+## Recommended setup (the safest practical default)
+
+| Your situation | Use | Why |
+| --- | --- | --- |
+| JVM / Android | nothing — just the dependency | the binary ships in Signal's own Maven jars |
+| Apple, you have (or can install) Rust | **`mode = "build"`** (the default) | compiled from Signal's source on your machine — reproducible, covers macOS too, nothing prebuilt to trust |
+| Apple, no Rust / want speed (iOS only) | `mode = "download"` **+ a pinned checksum** | Signal's official prebuilt, but only trustworthy once you pin its SHA-256 |
+
+**Bottom line: prefer `build`.** It is the only option where you trust *nothing but Signal's source
+and your own compiler*. Use `download` when Rust isn't available, but always pin the checksum (below)
+— an unpinned download is unverified.
+
+## Consumer safety checklist
+
+1. **Pin the version, and keep it matched.** Set `kryptonLibsignal { version.set("<X>") }` to the
+   exact libsignal version Krypton targets (see the README badge / `gradle/libs.versions.toml`).
+   `./gradlew check` runs `verifyLibsignalVersion` and fails on a mismatch — leave that wired in.
+2. **Prefer building from source** (`mode = "build"`, the default). The bytes are produced locally
+   from `signalapp/libsignal` at the `v<version>` tag.
+3. **If you download, pin the checksum.** Set `LIBSIGNAL_FFI_PREBUILD_CHECKSUM` so a tampered or
+   swapped archive aborts the build. Never ship a build that downloaded unverified.
+4. **Verify once, in CI, not just locally.** Run the fetch in CI so the binary your releases link
+   against is produced by an auditable, repeatable job — not whatever happens to be on a laptop.
+5. **Re-derive trust, don't take ours.** You can reproduce everything yourself (next section); you
+   never have to trust Krypton for the cryptographic binary.
+
+## Getting a checksum you can trust
+
+Signal does **not** publish a stable, committed SHA-256 for the prebuilt archive (it's passed via an
+env var). So establish your own ground truth:
+
+```sh
+# Build the binary from Signal's source ONCE (this is the authoritative artifact):
+scripts/fetch-libsignal-ffi.sh 0.86.5            # build mode
+
+# …or hash the official prebuilt you intend to pin:
+curl -fsSL https://build-artifacts.signal.org/libraries/libsignal-client-ios-build-v0.86.5.tar.gz \
+  | shasum -a 256
+```
+
+Record that SHA-256 in your own repo/CI and feed it to every subsequent `download` build via
+`LIBSIGNAL_FFI_PREBUILD_CHECKSUM`. Now any future download that doesn't match *your* pinned value
+fails — you're trusting a value you verified, not one handed to you at fetch time.
+
+## Reproduce it yourself
+
+Don't trust — verify. Anyone can confirm the binary is genuine libsignal:
+
+```sh
+# 1. Build from Signal's source and confirm it links Krypton's bindings:
+scripts/fetch-libsignal-ffi.sh 0.86.5
+nm ~/.krypton/libsignal/0.86.5/ios-arm64/libsignal_ffi.a | grep -c ' T _signal_'   # exported FFI symbols
+
+# 2. Two independent builders should land on the same archive contents for the same tag.
+```
+
+The release tag is `signalapp/libsignal@v<version>` (an annotated tag by a Signal maintainer; not
+git-GPG-signed, so the anchor is the org + commit, not a PGP signature). Krypton itself never enters
+the trust path for the cryptographic bytes.
+
 ## Scope and limitations
 
 Krypton is unaudited binding code over an audited core. The cryptographic guarantees are
