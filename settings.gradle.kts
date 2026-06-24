@@ -16,6 +16,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "krypton"
 
+include(":krypton-gradle-plugin")
 include(":krypton-core")
 include(":krypton")
 include(":krypton-storage")
@@ -24,3 +25,6 @@ include(":krypton-sealed-sender")
 include(":krypton-double-ratchet")
 include(":krypton-zkgroup")
 include(":samples:encrypted-chat")
+include(":samples:jvm-demo")
+include(":samples:ktor-server")
+include(":samples:composeApp")

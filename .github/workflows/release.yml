@@ -1,0 +1,70 @@
+name: Release
+
+# Publishes the whole Krypton KMP library to Maven Central.
+#
+# Why a single macOS runner: it can build EVERY Kotlin target — all Apple arches
+# natively, and it cross-compiles JVM, Android, Linux, Windows and wasm. The only
+# Krypton publishes only cinterop bindings (no Signal binary embedded — see
+# SECURITY.md / "Bring your own libsignal"). This job builds the Apple .a FRESH
+# from libsignal's pinned source ONLY to run the real-crypto tests before
+# publishing; the published Apple klibs stay binding-only and Apple consumers
+# fetch libsignal themselves. JVM/Android libsignal comes from Maven.
+#
+# Trigger: push a tag like `v0.1.0`, or run manually. Set these repo secrets:
+#   MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD  — Central Portal token
+#   SIGNING_KEY            — ASCII-armored GPG private key (in-memory signing)
+#   SIGNING_PASSWORD       — passphrase for that key
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: macos-14   # Apple Silicon: native Apple builds + cross-compiles the rest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # libsignal version is the single source of truth in the catalog; the native
+      # .a MUST match it (verifyLibsignalVersion enforces this below).
+      - name: Resolve libsignal version
+        id: ls
+        run: |
+          v=$(grep -oE '^libsignal = "[^"]+"' gradle/libs.versions.toml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "libsignal=$v"
+
+      # The Rust build of libsignal is slow; cache the produced .a per version so it
+      # only rebuilds when the libsignal version actually changes.
+      - name: Cache libsignal_ffi.a
+        id: ffi-cache
+        uses: actions/cache@v4
+        with:
+          path: krypton-protocol/libs/apple
+          key: libsignal-ffi-${{ steps.ls.outputs.version }}-apple-v1
+
+      - name: Build fresh libsignal_ffi.a (cache miss)
+        if: steps.ffi-cache.outputs.cache-hit != 'true'
+        run: scripts/build-libsignal-ffi.sh ${{ steps.ls.outputs.version }}
+
+      # Guard: native .a version must equal the JVM/Android Maven version, or an
+      # iOS user and an Android user could silently fail to talk to each other.
+      - name: Verify native/Maven libsignal versions match
+        run: ./gradlew :krypton-protocol:verifyLibsignalVersion
+
+      - name: Publish + release to Maven Central
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+        run: ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache --stacktrace

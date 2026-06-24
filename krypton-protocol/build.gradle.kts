@@ -1,10 +1,12 @@
 @file:OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
 
+import io.krypton.Configuration
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeCompilation
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.library)
+    alias(libs.plugins.vanniktech.publish)
 }
 
 kotlin {
@@ -18,9 +20,6 @@ kotlin {
     iosSimulatorArm64()
     macosX64()
     macosArm64()
-    tvosX64()
-    tvosArm64()
-    tvosSimulatorArm64()
     linuxX64()
     mingwX64()
     wasmJs { browser() }
@@ -81,43 +80,48 @@ kotlin {
 
         // Connect each Apple target's main/test source sets to appleMain/appleTest
         listOf("iosX64", "iosArm64", "iosSimulatorArm64",
-               "macosX64", "macosArm64",
-               "tvosX64", "tvosArm64", "tvosSimulatorArm64").forEach { target ->
+               "macosX64", "macosArm64").forEach { target ->
             getByName("${target}Main").dependsOn(appleMain)
             getByName("${target}Test").dependsOn(appleTest)
         }
     }
 
-    // ── Cinterop: link libsignal_ffi on all Apple platforms ──────────────
-    fun KotlinNativeCompilation.configureCInterop() {
-        cinterops {
-            val libsignalFfi by creating {
-                defFile(project.file("src/appleMain/cinterop/libsignal_ffi.def"))
-                packageName("org.signal.libsignal.ffi")
-                compilerOpts("-I${project.projectDir}/libs/apple")
-            }
+    // ── Cinterop: link libsignal_ffi on every Apple target ───────────────
+    // Each target links its OWN-arch static lib from libs/apple/<arch>/ and the
+    // `.def`'s `staticLibraries` directive EMBEDS that .a into the produced klib,
+    // BRING-YOUR-OWN-LIBSIGNAL (Model B): Krypton ships NO Signal binary. The
+    // cinterop generates bindings from headers only — the `.a` is never embedded
+    // in the published klib. Both Krypton's own tests AND consumers supply the
+    // libsignal_ffi.a at link time via -L, after fetching it from Signal's
+    // official source on their own machine (scripts/fetch-libsignal-ffi.sh).
+    fun org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget.configureLibsignal(libArchDir: String) {
+        val archDir = "${project.projectDir}/libs/apple/$libArchDir"
+        compilations.getByName("main").cinterops.create("libsignalFfi") {
+            defFile(project.file("src/appleMain/cinterop/libsignal_ffi.def"))
+            packageName("org.signal.libsignal.ffi")
+            compilerOpts("-I${project.projectDir}/libs/apple")
         }
+        // Local -L so Krypton's own test executables link the fetched .a. The
+        // published klib carries only `-lsignal_ffi`; consumers add their own -L.
+        binaries.all { linkerOpts("-L$archDir") }
     }
 
-    // macOS (host architectures)
-    macosArm64 { compilations.getByName("main").configureCInterop() }
-    macosX64   { compilations.getByName("main").configureCInterop() }
-
-    // iOS targets
-    iosArm64          { compilations.getByName("main").configureCInterop() }
-    iosX64            { compilations.getByName("main").configureCInterop() }
-    iosSimulatorArm64 { compilations.getByName("main").configureCInterop() }
-
-    // tvOS targets
-    tvosArm64          { compilations.getByName("main").configureCInterop() }
-    tvosX64            { compilations.getByName("main").configureCInterop() }
-    tvosSimulatorArm64 { compilations.getByName("main").configureCInterop() }
+    // Each Apple target links its own arch's libsignal_ffi.a (consumer-supplied).
+    macosArm64        { configureLibsignal("macos-arm64") }   // Apple Silicon desktop
+    macosX64          { configureLibsignal("macos-x64") }     // Intel desktop
+    iosArm64          { configureLibsignal("ios-arm64") }     // device
+    iosSimulatorArm64 { configureLibsignal("ios-sim-arm64") } // Apple Silicon sim
+    iosX64            { configureLibsignal("ios-sim-x64") }   // Intel sim
 }
 
 android {
     namespace = "io.krypton.protocol"
     compileSdk = io.krypton.Configuration.COMPILE_SDK
     defaultConfig { minSdk = io.krypton.Configuration.MIN_SDK }
+}
+
+mavenPublishing {
+    coordinates(Configuration.GROUP, "krypton-protocol", Configuration.VERSION)
 }
 
 // ── libsignal version-skew guard ─────────────────────────────────────────────

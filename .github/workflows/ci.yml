@@ -1,0 +1,70 @@
+name: CI
+
+# Validates every PR / push — and crucially, proves a libsignal version bump
+# actually works end-to-end BEFORE it is merged and tagged for release.
+#
+# The native libsignal_ffi.a is never committed: this job rebuilds it FRESH from
+# Signal's source at the pinned version (cached so it only rebuilds when the
+# version changes), embeds it into the Apple klib, and runs the real-crypto
+# tests on JVM and the iOS simulator. If Signal ships a version whose FFI ABI
+# changed, this job goes red here instead of breaking a published release.
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: macos-14   # builds Apple natively + cross-compiles jvm/android/linux/wasm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Single source of truth — the catalog version drives BOTH tracks.
+      - name: Resolve libsignal version
+        id: ls
+        run: |
+          v=$(grep -oE '^libsignal = "[^"]+"' gradle/libs.versions.toml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "libsignal=$v"
+
+      # Cache the built .a per version: a normal PR restores instantly; the first
+      # PR after a version bump pays the Rust build once, then everyone benefits.
+      - name: Cache libsignal_ffi.a
+        id: ffi-cache
+        uses: actions/cache@v4
+        with:
+          path: krypton-protocol/libs/apple
+          key: libsignal-ffi-${{ steps.ls.outputs.version }}-apple-v1
+
+      - name: Build fresh libsignal_ffi.a from Signal source (cache miss)
+        if: steps.ffi-cache.outputs.cache-hit != 'true'
+        run: scripts/build-libsignal-ffi.sh ${{ steps.ls.outputs.version }}
+
+      # Hard gate: native .a version must equal the JVM/Android Maven version.
+      - name: Verify native/Maven libsignal versions match
+        run: ./gradlew :krypton-protocol:verifyLibsignalVersion
+
+      # Prove the (possibly new) libsignal works on both tracks.
+      - name: JVM real-crypto tests
+        run: ./gradlew :krypton-protocol:jvmTest
+
+      - name: iOS simulator real-crypto tests
+        run: ./gradlew :krypton-protocol:iosSimulatorArm64Test
+
+      # Make sure every published target still compiles against this version.
+      - name: Compile all published targets
+        run: ./gradlew :krypton:assemble

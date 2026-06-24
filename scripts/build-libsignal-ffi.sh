@@ -28,16 +28,37 @@ if [ ! -d "$WORK/.git" ]; then
 fi
 cd "$WORK"
 
-# Host build by default. Add `--target <triple>` loops here for cross builds
-# (e.g. aarch64-apple-ios, x86_64-unknown-linux-gnu, x86_64-pc-windows-gnu).
-cargo build -p libsignal-ffi --release
+# Apple per-arch builds. Each Kotlin/Native Apple target links its OWN-arch .a, so
+# we build one archive per triple into libs/apple/<arch>/. The Krypton cinterop
+# (krypton-protocol/build.gradle.kts → configureCInterop) maps target → subdir.
+#
+#   triple                  -> subdir          Kotlin target
+#   aarch64-apple-darwin    -> macos-arm64     macosArm64   (host; runnable tests)
+#   aarch64-apple-ios       -> ios-arm64       iosArm64     (device)
+#   aarch64-apple-ios-sim   -> ios-sim-arm64   iosSimulatorArm64 (runnable on arm64 sim)
+#
+# libsignal pins its own toolchain via rust-toolchain(.toml); cross stds must be
+# added for THAT toolchain, not just the default — so resolve it and add targets.
+TOOLCHAIN="$(rustup show active-toolchain 2>/dev/null | awk '{print $1}')"
+echo "==> libsignal toolchain: ${TOOLCHAIN:-<default>}"
+
+build_arch() {
+  local triple="$1" subdir="$2"
+  echo "==> building libsignal-ffi for $triple -> $subdir"
+  rustup target add ${TOOLCHAIN:+--toolchain "$TOOLCHAIN"} "$triple" >/dev/null 2>&1 || true
+  cargo build -p libsignal-ffi --release --target "$triple"
+  mkdir -p "$DEST/$subdir"
+  cp "target/$triple/release/libsignal_ffi.a" "$DEST/$subdir/libsignal_ffi.a"
+}
 
 mkdir -p "$DEST"
-A_FILE="$(find target -name 'libsignal_ffi.a' | head -1)"
-[ -n "$A_FILE" ] || { echo "ERROR: libsignal_ffi.a not found under target/" >&2; exit 1; }
-cp "$A_FILE" "$DEST/libsignal_ffi.a"
+build_arch aarch64-apple-darwin  macos-arm64    # macosArm64        (Apple Silicon desktop)
+build_arch x86_64-apple-darwin   macos-x64      # macosX64          (Intel desktop)
+build_arch aarch64-apple-ios     ios-arm64      # iosArm64          (device)
+build_arch aarch64-apple-ios-sim ios-sim-arm64  # iosSimulatorArm64 (Apple Silicon sim)
+build_arch x86_64-apple-ios      ios-sim-x64    # iosX64            (Intel sim)
 
-# Regenerate / copy the FFI header if present (path may vary by version).
+# Regenerate / copy the FFI header if present (arch-independent; path varies by version).
 H_FILE="$(find . -name 'signal_ffi.h' | head -1 || true)"
 [ -n "$H_FILE" ] && cp "$H_FILE" "$DEST/signal_ffi.h" || echo "WARN: signal_ffi.h not found — keep existing header"
 
@@ -45,7 +66,7 @@ H_FILE="$(find . -name 'signal_ffi.h' | head -1 || true)"
 # the native .a matches the JVM/Android Maven version (no silent skew).
 echo "$VERSION" > "$DEST/VERSION"
 
-echo "==> Updated $DEST/libsignal_ffi.a to libsignal $VERSION"
+echo "==> Updated per-arch libsignal_ffi.a (macos-arm64, macos-x64, ios-arm64, ios-sim-arm64, ios-sim-x64) to libsignal $VERSION"
 echo "    NOTE: bump 'libsignal' in gradle/libs.versions.toml to '$VERSION' too, or"
 echo "    ./gradlew check will fail on version skew."
-echo "    Remember: the .a is gitignored (>100MB). Distribute via CI artifact / release / git-lfs."
+echo "    Remember: the .a files are gitignored (>100MB). Distribute via CI artifact / release / git-lfs."

@@ -1,5 +1,12 @@
+# Bring-your-own-libsignal (Model B): Krypton does NOT embed Signal's binary.
+# This cinterop compiles bindings from the headers only; the actual
+# libsignal_ffi.a is supplied at LINK time by the consumer, who fetches it from
+# Signal's official source on their own machine (scripts/fetch-libsignal-ffi.sh
+# or build-libsignal-ffi.sh) and points the linker at it with -L<dir>.
+#
+# `linkerOpts = -lsignal_ffi` is recorded in the published klib so the consumer
+# only needs to add the -L search path. No Signal binary is shipped by Krypton —
+# the trust anchor is Signal, and there is nothing of ours to suspect.
 headers = krypton_ffi.h
 headerFilter = krypton_ffi.*
-staticLibraries = libsignal_ffi.a libkrypton_adapter.a
-libraryPaths = /Users/ranbirsingh/krypton/krypton-protocol/libs/apple
-compilerOpts = -I/Users/ranbirsingh/krypton/krypton-protocol/libs/apple
+linkerOpts = -lsignal_ffi

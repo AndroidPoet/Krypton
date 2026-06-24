@@ -1,6 +1,6 @@
 # Krypton — Project State
 
-_Last updated: 2026-06-12 · libsignal pinned to **0.86.5** · branch `master` @ `e69596e`_
+_Last updated: 2026-06-14 · libsignal pinned to **0.86.5** · branch `master`_
 
 A snapshot of what's real, what's verified, and what's pending. The rule for this
 project: **no fake crypto.** Every feature is either backed by real libsignal and
@@ -51,16 +51,34 @@ placeholder.
 |---|---|---|
 | JVM (desktop) | ✅ Real, verified | Signal's Maven jars (bundled natives) |
 | Android | ✅ Real | `libsignal-android` (same bridge as JVM) |
-| iOS / macOS (+ tvOS) | 🟡 Partial | cinterop → `libsignal_ffi`; **send path verified, decrypt WIP** (see below) |
+| iOS / macOS (+ tvOS) | ✅ Real, verified | cinterop → `libsignal_ffi`; **send + decrypt round-trip verified** (see below) |
 | Linux / Windows (native) | ⚠️ Fail-loud | no libsignal binary; use JVM for desktop |
 | wasmJs | ⚠️ Fail-loud | libsignal has no wasm build |
 
-Full, test-verified E2EE runs on **JVM and Android**. On **Apple**, real
-libsignal_ffi is wired and the send path is proven by a real-FFI test
-(`NativeRealCryptoTest`): genuine ~1568-byte Kyber pre-key, X3DH handshake, and
-encrypt all succeed. The PreKey **decrypt** path still returns libsignal error 30
-(`InvalidMessage`) and is tracked as an `@Ignore`d test — **don't ship Apple E2EE
-until that's green.**
+Full, test-verified E2EE runs on **JVM, Android, iOS, and macOS**. On **Apple**,
+real libsignal_ffi 0.86.5 is wired and the **full round-trip** is proven by a
+real-FFI test (`NativeRealCryptoTest`, run on every Apple target via `appleTest`):
+genuine ~1568-byte Kyber pre-key, X3DH handshake, encrypt, **and PreKey decrypt
+back to plaintext** all succeed — matching the JVM/Android tracks.
+
+Per-arch native binaries are built and linked (each Kotlin target links its
+own-arch `libsignal_ffi.a` from `libs/apple/<arch>/`):
+
+| Arch dir | Triple | Kotlin target | Status |
+|---|---|---|---|
+| `macos-arm64` | `aarch64-apple-darwin` | `macosArm64` | ✅ round-trip **runs** (host test) |
+| `ios-sim-arm64` | `aarch64-apple-ios-sim` | `iosSimulatorArm64` | ✅ round-trip **runs** on the iOS simulator |
+| `ios-arm64` | `aarch64-apple-ios` | `iosArm64` (device) | ✅ test executable **links** as `platform IOS` (run needs a physical device) |
+
+Other Apple arches (`*X64`, `tvos*`) compile against a fallback `.a` but aren't
+link/run-verified here — build their own-arch `.a` (same script) to ship them.
+
+> The earlier PreKey-decrypt failure (libsignal error 30 / `InvalidMessage`) was a
+> binary/header version drift: the native bridge had been built against a newer
+> mislabeled `libsignal_ffi.a` whose store-callback ABI (phantom `local_address`
+> params, `destroy` struct fields, pair-returning identity callback) didn't match
+> the 0.86.5 Rust core. Fixed by rebuilding the real 0.86.5 `.a` from source and
+> converting the entire `appleMain` bridge to the 0.86.5 callback ABI.
 
 ---
 
@@ -81,18 +99,19 @@ until that's green.**
 
 ## Pending / next up
 
-1. **Maven publishing** — wire CI to build `libsignal_ffi.a` per native target →
-   link into per-target artifacts → publish `io.krypton:krypton` to Maven Central,
-   so the one-line install becomes real. (Workflows scaffolded in `.github/workflows/`,
-   not yet run — repo is private.)
-2. **Apple native decrypt** — the zeroed-Kyber placeholder is now **fixed** (real
-   Kyber key generated, signed, serialized into the bundle, and accepted by X3DH;
-   verified by `NativeRealCryptoTest`). Remaining: the PreKey **decrypt** path
-   returns `InvalidMessage` (error 30) — the receive-path FFI store wiring needs
-   debugging before Apple E2EE is shippable.
-3. **Group messaging (sender keys)** — `groupEncrypt/groupDecrypt` are not wired yet.
-4. _(Optional)_ zkgroup credential dance — implementable + locally testable if a
+1. **Maven publishing** — the per-arch native build + link is now proven locally
+   (`scripts/build-libsignal-ffi.sh` produces `macos-arm64` / `ios-arm64` /
+   `ios-sim-arm64`, each links into its Kotlin target). Remaining: run that in CI →
+   publish `io.krypton:krypton` (+ per-target variants) to Maven Central so the
+   one-line install becomes real. (Workflows scaffolded in `.github/workflows/`,
+   not yet run — repo is private.) Building the remaining ship arches (`iosX64`
+   sim-x64, `tvos*`) is the same script with more triples.
+2. **Group messaging (sender keys)** — `groupEncrypt/groupDecrypt` are not wired yet.
+3. _(Optional)_ zkgroup credential dance — implementable + locally testable if a
    compatible server is ever in scope.
+
+> **Done:** Apple native E2EE (incl. the PreKey **decrypt** receive path) now
+> works end-to-end on real `libsignal_ffi` 0.86.5 — see Platform support above.
 
 ---
 
@@ -101,6 +120,14 @@ until that's green.**
 ```bash
 # Real-libsignal crypto tests (X3DH, safety numbers, sealed sender, zkgroup)
 ./gradlew :krypton-protocol:jvmTest --tests "io.krypton.protocol.VerifiedProductionTest"
+
+# Real native Apple E2EE — full encrypt→decrypt round-trip on libsignal_ffi
+./gradlew :krypton-protocol:macosArm64Test          # runs on macOS host
+./gradlew :krypton-protocol:iosSimulatorArm64Test   # runs on the iOS simulator
+./gradlew :krypton-protocol:linkDebugTestIosArm64   # links the iOS-device arch
+
+# (Re)build the per-arch native libs — macos-arm64, ios-arm64, ios-sim-arm64
+scripts/build-libsignal-ffi.sh 0.86.5
 
 # zkgroup wrapper tests
 ./gradlew :krypton-zkgroup:jvmTest

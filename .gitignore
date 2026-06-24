@@ -4,14 +4,22 @@ build/
 local.properties
 .idea
 *.class
-*.jar
 *.log
 .DS_Store
 .cxx
 captures
 .externalNativeBuild
 
-# Prebuilt native crypto binaries (build artifacts — exceed GitHub size limits)
+# Prebuilt native crypto binaries (build artifacts — rebuilt fresh in CI,
+# exceed GitHub's size limits, and don't belong in source control).
 *.a
 *.o
+# Vendored libsignal jars (~100 MB) — these come from Maven, never commit them.
 krypton-protocol/libs/**/*.jar
+
+# Generated Xcode project — the source of truth is project.yml.
+# Run `xcodegen generate` in samples/composeApp/iosApp to recreate it.
+samples/composeApp/iosApp/iosApp.xcodeproj/
+
+# NOTE: the Gradle wrapper jar (gradle/wrapper/gradle-wrapper.jar) is intentionally
+# committed so `./gradlew` works on a fresh clone — do not add a blanket *.jar rule.
