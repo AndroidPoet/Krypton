@@ -121,6 +121,14 @@ Not yet published. To make the one-line install real, Krypton needs: CI that bui
 | `krypton-zkgroup` | Client-side zkgroup — group params, profile access key/version/commitment, and the group cipher (real on JVM/Android) |
 | `krypton-double-ratchet` | ⛔ fails loud — the ratchet runs inside `KryptonProtocol`/libsignal |
 
+## Contributing
+
+Contributions are welcome! If you've found a bug, have an idea for an improvement, or want to contribute new features, please open an issue or submit a pull request.
+
+## Find this repository useful? :heart:
+Support it by joining __[stargazers](https://github.com/androidpoet/krypton/stargazers)__ for this repository. :star: <br>
+Also, __[follow me](https://github.com/androidpoet)__ on GitHub for my next creations! 🤩
+
 ## License
 
 AGPL-3.0-only (matching libsignal's license)
